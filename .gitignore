@@ -1,0 +1,11 @@
+# Secrets
+.env
+
+# Volumes
+raidhub-postgres
+
+# Binaries
+bin/
+
+# Logs
+*.log
