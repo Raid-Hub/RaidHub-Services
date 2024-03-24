@@ -30,6 +30,7 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 	for instanceID := range ch {
 		startTime := time.Now()
 		notFoundCount := 0
+		errorCount := 0
 		i := 0
 		for {
 			cb = cb % circularBufferSize
@@ -61,7 +62,9 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 				logInsufficentPrivileges(instanceID, startTime)
 				break
 			} else if result == pgcr.InternalError || result == pgcr.BadFormat {
+				errorCount++
 				log.Println("Error parsing data for instanceId", instanceID)
+				time.Sleep(time.Duration(10*errorCount) * time.Second)
 			}
 
 			// If we have not found the instance id after some time
@@ -73,6 +76,9 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 				break
 			} else if notFoundCount == numMissesForWarning {
 				logMissedInstanceWarning(instanceID, startTime)
+			} else if errorCount > 7 {
+				logMissedInstance(instanceID, startTime, false)
+				break
 			}
 			timeout := time.Duration((retryDelayTime-randomVariation+rand.Intn((2*randomVariation)+1))*notFoundCount) * time.Millisecond
 			time.Sleep(timeout)

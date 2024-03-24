@@ -37,7 +37,7 @@ type Author struct {
 type Field struct {
 	Name   string `json:"name"`
 	Value  string `json:"value"`
-	Inline bool  `json:"inline"`
+	Inline bool   `json:"inline"`
 }
 
 type Thumbnail struct {
