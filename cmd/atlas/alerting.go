@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"raidhub/shared/discord"
+	"raidhub/shared/monitoring"
 )
 
 var (
@@ -79,16 +80,18 @@ func logIntervalState(medianLag float64, countWorkers int, percentNotFound float
 }
 
 func logWorkersStarting(numWorkers int, latestId int64) {
+	monitoring.ActiveWorkers.Set(float64(numWorkers))
+
 	webhook := discord.Webhook{
 		Embeds: []discord.Embed{{
 			Title: "Workers Starting",
 			Color: 9807270, // Gray
 			Fields: []discord.Field{{
-				Name:  "Current Instance Id",
-				Value: fmt.Sprintf("`%d`", latestId),
-			}, {
 				Name:  "Count",
 				Value: fmt.Sprintf("%d", numWorkers),
+			}, {
+				Name:  "Current Instance Id",
+				Value: fmt.Sprintf("`%d`", latestId),
 			}},
 			Timestamp: time.Now().Format(time.RFC3339),
 			Footer:    discord.CommonFooter,

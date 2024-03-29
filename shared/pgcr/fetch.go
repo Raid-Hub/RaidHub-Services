@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"raidhub/shared/monitoring"
+	"strconv"
 	"time"
 )
 
@@ -37,6 +39,7 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, baseUR
 			log.Printf("Error decoding response for instanceId %d: %s", instanceID, err)
 			return BadFormat, nil
 		}
+		monitoring.BungieErrorCode.WithLabelValues(strconv.Itoa(data.ErrorCode)).Inc()
 
 		if data.ErrorCode == 1653 {
 			// PGCRNotFound
@@ -61,6 +64,7 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, baseUR
 		log.Printf("Error decoding response for instanceId %d: %s", instanceID, err)
 		return BadFormat, nil
 	}
+	monitoring.BungieErrorCode.WithLabelValues(strconv.Itoa(data.ErrorCode)).Inc()
 
 	if data.Response.ActivityDetails.Mode != 4 {
 		// Skip non raid
@@ -76,8 +80,12 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, baseUR
 		return NonRaid, &lag
 	}
 
-	lag, committed, err := StorePGCR(data.Response, db)
+	pgcr, err := ProcessDestinyReport(data.Response)
+	if err != nil {
+		return BadFormat, nil
+	}
 
+	lag, committed, err := StorePGCR(pgcr, &data.Response, db)
 	if err != nil {
 		log.Println(err)
 		return InternalError, nil

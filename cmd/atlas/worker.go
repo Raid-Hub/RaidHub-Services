@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"raidhub/shared/monitoring"
 	"raidhub/shared/pgcr"
 )
 
@@ -22,7 +24,7 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 
 	randomVariation := retryDelayTime / 2
 
-	var notFound int = 0
+	var totalWorkerNotFounds int = 0
 	// circular buffer
 	var behindHead [circularBufferSize]float64
 	cb := 0
@@ -32,10 +34,13 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 		notFoundCount := 0
 		errorCount := 0
 		i := 0
+		var result pgcr.PGCRResult
+		var lag *time.Duration
+		var reqTime time.Duration
 		for {
 			cb = cb % circularBufferSize
 			reqStartTime := time.Now()
-			result, lag := pgcr.FetchAndStorePGCR(client, instanceID, db, proxy, securityKey)
+			result, lag = pgcr.FetchAndStorePGCR(client, instanceID, db, proxy, securityKey)
 
 			if lag != nil {
 				behindHead[cb] = lag.Seconds()
@@ -49,11 +54,10 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 			if result == pgcr.Success {
 				endTime := time.Now()
 				workerTime := endTime.Sub(startTime).Milliseconds()
-				reqTime := endTime.Sub(reqStartTime).Milliseconds()
-				log.Printf("Added PGCR with instanceId %d (%d / %d / %d / %.0f)", instanceID, i, workerTime, reqTime, lag.Seconds())
+				reqTime = endTime.Sub(reqStartTime)
+				log.Printf("Added PGCR with instanceId %d (%d / %d / %d / %.0f)", instanceID, i, workerTime, reqTime.Milliseconds(), lag.Seconds())
 				break
-			} else if result == pgcr.NotFound {
-				notFound++
+			} else if result == pgcr.NotFound || result == pgcr.InternalError {
 				notFoundCount++
 			} else if result == pgcr.SystemDisabled {
 				time.Sleep(30 * time.Second)
@@ -61,10 +65,8 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 				failuresChannel <- instanceID
 				logInsufficentPrivileges(instanceID, startTime)
 				break
-			} else if result == pgcr.InternalError || result == pgcr.BadFormat {
+			} else if result == pgcr.BadFormat {
 				errorCount++
-				log.Println("Error parsing data for instanceId", instanceID)
-				time.Sleep(time.Duration(10*errorCount) * time.Second)
 			}
 
 			// If we have not found the instance id after some time
@@ -72,24 +74,33 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 				log.Printf("Could not find instance id %d a total of %d times, logging it to the file", instanceID, notFoundCount)
 				failuresChannel <- instanceID
 				logMissedInstance(instanceID, startTime, false)
-				notFound++
 				break
 			} else if notFoundCount == numMissesForWarning {
 				logMissedInstanceWarning(instanceID, startTime)
-			} else if errorCount > 7 {
+			} else if errorCount > 13 {
 				logMissedInstance(instanceID, startTime, false)
 				break
 			}
-			timeout := time.Duration((retryDelayTime-randomVariation+rand.Intn((2*randomVariation)+1))*notFoundCount) * time.Millisecond
+			timeout := time.Duration((retryDelayTime-randomVariation+rand.Intn((2*randomVariation)+1))*(notFoundCount+errorCount)) * time.Millisecond
 			time.Sleep(timeout)
 			i++
 		}
-		// Track the number of not founds for this request
-		notFoundCount += notFound
+
+		statusStr := fmt.Sprintf("%d", result)
+		attemptsStr := fmt.Sprintf("%d", i+1)
+
+		monitoring.PGCRCrawlStatus.WithLabelValues(statusStr, attemptsStr).Inc()
+		if lag != nil {
+			monitoring.PGCRCrawlLag.WithLabelValues(statusStr, attemptsStr).Observe(float64(lag.Milliseconds()))
+		}
+		monitoring.PGCRCrawlReqTime.WithLabelValues(statusStr, attemptsStr).Observe(float64(reqTime.Milliseconds()))
+
+		// Track the number of not founds for this worker
+		totalWorkerNotFounds += notFoundCount
 	}
 
 	results <- &WorkerResult{
 		Lag:       behindHead[:],
-		NotFounds: notFound,
+		NotFounds: totalWorkerNotFounds,
 	}
 }
