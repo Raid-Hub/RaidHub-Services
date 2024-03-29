@@ -8,7 +8,8 @@ type DestinyPostGameCarnageReportErrorCode struct {
 }
 
 type DestinyPostGameCarnageReportResponse struct {
-	Response DestinyPostGameCarnageReport `json:"Response"`
+	Response  DestinyPostGameCarnageReport `json:"Response"`
+	ErrorCode int                          `json:"ErrorCode"`
 }
 
 type DestinyPostGameCarnageReport struct {

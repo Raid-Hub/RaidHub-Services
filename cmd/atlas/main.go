@@ -12,6 +12,7 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"raidhub/shared/monitoring"
 	"raidhub/shared/postgres"
 )
 
@@ -41,6 +42,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error getting latest instance id: %s", err)
 	}
+
+	monitoring.RegisterPrometheus(9090)
 
 	run(numWorkersStart, instanceId, db)
 
@@ -127,6 +130,8 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 		medianLag = (arrSlice[n/2-1] + arrSlice[n/2]) / 2.0
 	}
 	fractionNotFound := float64(notFound) / float64(periodLength)
+
+	logIntervalState(medianLag, countWorkers, fractionNotFound*100)
 
 	newWorkers := 0
 	if fractionNotFound == 0 {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"raidhub/shared/discord"
+	"raidhub/shared/monitoring"
 )
 
 var (
@@ -79,6 +80,8 @@ func logIntervalState(medianLag float64, countWorkers int, percentNotFound float
 }
 
 func logWorkersStarting(numWorkers int, latestId int64) {
+	monitoring.ActiveWorkers.Set(float64(numWorkers))
+	
 	webhook := discord.Webhook{
 		Embeds: []discord.Embed{{
 			Title: "Workers Starting",
