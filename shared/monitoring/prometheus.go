@@ -14,7 +14,7 @@ var BungieErrorCode = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Name: "bungie_error_code",
 	},
-	[]string{"error_code"}, // labels
+	[]string{"error_code"},
 )
 
 // Track the number of active workers
@@ -25,24 +25,24 @@ var ActiveWorkers = prometheus.NewGauge(
 )
 
 var PGCRCrawlStatus = prometheus.NewCounterVec(
-    prometheus.CounterOpts{
-        Name: "pgcr_crawl_summary_status",
-    },
-    []string{"status", "attempts"},
+	prometheus.CounterOpts{
+		Name: "pgcr_crawl_summary_status",
+	},
+	[]string{"status", "attempts"},
 )
 
 var PGCRCrawlLag = prometheus.NewSummaryVec(
-    prometheus.SummaryOpts{
-        Name: "pgcr_crawl_summary_lag",
-    },
-    []string{"status", "attempts"},
+	prometheus.SummaryOpts{
+		Name: "pgcr_crawl_summary_lag",
+	},
+	[]string{"status", "attempts"},
 )
 
 var PGCRCrawlReqTime = prometheus.NewSummaryVec(
-    prometheus.SummaryOpts{
-        Name: "pgcr_crawl_summary_req_time",
-    },
-    []string{"status", "attempts"},
+	prometheus.SummaryOpts{
+		Name: "pgcr_crawl_summary_req_time",
+	},
+	[]string{"status", "attempts"},
 )
 
 // Port should be in range 9090-9093
@@ -57,6 +57,6 @@ func RegisterPrometheus(port int) {
 
 	go func() {
 		port := fmt.Sprintf(":%d", port)
-        log.Fatal(http.ListenAndServe(port, nil))
-    }()
+		log.Fatal(http.ListenAndServe(port, nil))
+	}()
 }

@@ -1,7 +1,7 @@
 package main
 
 const (
-	startBuffer int64 = 1_000
+	startBuffer int64 = 10_000
 
 	minWorkers = 5
 	maxWorkers = 200
