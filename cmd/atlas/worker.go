@@ -52,7 +52,7 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 				reqTime := endTime.Sub(reqStartTime).Milliseconds()
 				log.Printf("Added PGCR with instanceId %d (%d / %d / %d / %.0f)", instanceID, i, workerTime, reqTime, lag.Seconds())
 				break
-			} else if result == pgcr.NotFound {
+			} else if result == pgcr.NotFound || result == pgcr.InternalError {
 				notFound++
 				notFoundCount++
 			} else if result == pgcr.SystemDisabled {
@@ -61,10 +61,8 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 				failuresChannel <- instanceID
 				logInsufficentPrivileges(instanceID, startTime)
 				break
-			} else if result == pgcr.InternalError || result == pgcr.BadFormat {
+			} else if result == pgcr.BadFormat {
 				errorCount++
-				log.Println("Error parsing data for instanceId", instanceID)
-				time.Sleep(time.Duration(10*errorCount) * time.Second)
 			}
 
 			// If we have not found the instance id after some time
@@ -76,11 +74,11 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 				break
 			} else if notFoundCount == numMissesForWarning {
 				logMissedInstanceWarning(instanceID, startTime)
-			} else if errorCount > 7 {
+			} else if errorCount > 13 {
 				logMissedInstance(instanceID, startTime, false)
 				break
 			}
-			timeout := time.Duration((retryDelayTime-randomVariation+rand.Intn((2*randomVariation)+1))*notFoundCount) * time.Millisecond
+			timeout := time.Duration((retryDelayTime-randomVariation+rand.Intn((2*randomVariation)+1))*(notFoundCount+errorCount)) * time.Millisecond
 			time.Sleep(timeout)
 			i++
 		}

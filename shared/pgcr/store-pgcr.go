@@ -9,16 +9,10 @@ import (
 )
 
 // Returns lag, is_new, err
-func StorePGCR(report DestinyPostGameCarnageReport, postgresDb *sql.DB) (*time.Duration, bool, error) {
-	pgcr, err := ProcessDestinyReport(report)
-	if err != nil {
-		log.Println("Failed to process report")
-		return nil, false, err
-	}
-
+func StorePGCR(pgcr *ProcessedActivity, raw *DestinyPostGameCarnageReport, postgresDb *sql.DB) (*time.Duration, bool, error) {
 	// Identify the raid which this PGCR belongs to
 	var raidId int
-	err = postgresDb.QueryRow(`SELECT raid_id FROM raid_definition WHERE hash = $1`, pgcr.RaidHash).Scan(&raidId)
+	err := postgresDb.QueryRow(`SELECT raid_id FROM raid_definition WHERE hash = $1`, pgcr.RaidHash).Scan(&raidId)
 	if err != nil {
 		log.Printf("Error finding raid_id for %d", pgcr.RaidHash)
 		return nil, false, err
@@ -27,7 +21,7 @@ func StorePGCR(report DestinyPostGameCarnageReport, postgresDb *sql.DB) (*time.D
 	lag := time.Since(pgcr.DateCompleted)
 
 	// Store the raw JSON
-	err = StoreJSON(report, postgresDb)
+	err = StoreJSON(raw, postgresDb)
 	if err != nil {
 		log.Println("Failed to store raw JSON")
 		return nil, false, err
@@ -61,10 +55,10 @@ func StorePGCR(report DestinyPostGameCarnageReport, postgresDb *sql.DB) (*time.D
 		pqErr, ok := err.(*pq.Error)
 		if ok && (pqErr.Code == "23503" || pqErr.Code == "23505") {
 			// Handle the duplicate key error here
-			log.Printf("Duplicate instanceId: %s", report.ActivityDetails.InstanceId)
+			log.Printf("Duplicate instanceId: %d", pgcr.InstanceId)
 			return &lag, false, nil
 		} else {
-			log.Printf("Error inserting activity into DB for instanceId %s", report.ActivityDetails.InstanceId)
+			log.Printf("Error inserting activity into DB for instanceId %d", pgcr.InstanceId)
 			return nil, false, err
 		}
 	}

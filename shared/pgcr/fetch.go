@@ -76,8 +76,12 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, baseUR
 		return NonRaid, &lag
 	}
 
-	lag, committed, err := StorePGCR(data.Response, db)
+	pgcr, err := ProcessDestinyReport(data.Response)
+	if err != nil {
+		return BadFormat, nil
+	}
 
+	lag, committed, err := StorePGCR(pgcr, &data.Response, db)
 	if err != nil {
 		log.Println(err)
 		return InternalError, nil

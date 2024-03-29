@@ -84,11 +84,11 @@ func logWorkersStarting(numWorkers int, latestId int64) {
 			Title: "Workers Starting",
 			Color: 9807270, // Gray
 			Fields: []discord.Field{{
-				Name:  "Current Instance Id",
-				Value: fmt.Sprintf("`%d`", latestId),
-			}, {
 				Name:  "Count",
 				Value: fmt.Sprintf("%d", numWorkers),
+			}, {
+				Name:  "Current Instance Id",
+				Value: fmt.Sprintf("`%d`", latestId),
 			}},
 			Timestamp: time.Now().Format(time.RFC3339),
 			Footer:    discord.CommonFooter,

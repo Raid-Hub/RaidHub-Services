@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func StoreJSON(report DestinyPostGameCarnageReport, db *sql.DB) error {
+func StoreJSON(report *DestinyPostGameCarnageReport, db *sql.DB) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return err

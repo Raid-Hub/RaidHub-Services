@@ -128,20 +128,18 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 	}
 	fractionNotFound := float64(notFound) / float64(periodLength)
 
-	logIntervalState(medianLag, countWorkers, fractionNotFound*100)
-
-	// If we aren't getting 404's, just spike the workers up to ensure we catch up to live ASAP
+	newWorkers := 0
 	if fractionNotFound == 0 {
-		return maxWorkers
+		// If we aren't getting 404's, just spike the workers up to ensure we catch up to live ASAP
+		newWorkers = int(math.Ceil(float64(countWorkers) * (1 + float64(medianLag-30)/100)))
+	} else {
+		decreaseFraction := (retryDelayTime / 800 * (fractionNotFound - 0.025)) // do not let workers go below 2.5%
+		if decreaseFraction > 0.8 {
+			decreaseFraction = 0.8
+		}
+		// Adjust number of workers for the next period
+		newWorkers = int(math.Round(float64(countWorkers) - decreaseFraction*float64(countWorkers)))
 	}
-
-	decreaseFraction := (retryDelayTime / 800 * (fractionNotFound - 0.025)) // do not let workers go below 2.5%
-	if decreaseFraction > 0.8 {
-		decreaseFraction = 0.8
-	}
-
-	// Adjust number of workers for the next period
-	newWorkers := int(math.Round(float64(countWorkers) - decreaseFraction*float64(countWorkers)))
 
 	if newWorkers > maxWorkers {
 		newWorkers = maxWorkers
