@@ -44,7 +44,7 @@ type ProcessedPlayer struct {
 	BungieGlobalDisplayNameCode *string
 }
 
-func ProcessDestinyReport(report DestinyPostGameCarnageReport) (*ProcessedActivity, error) {
+func ProcessDestinyReport(report *DestinyPostGameCarnageReport) (*ProcessedActivity, error) {
 	startDate, err := time.Parse(time.RFC3339, report.Period)
 	if err != nil {
 		return nil, err
@@ -253,7 +253,7 @@ var leviHashes = map[uint32]bool{
 }
 
 // isFresh checks if a DestinyPostGameCarnageReportData is considered fresh based on the period start time.
-func isFresh(pgcr DestinyPostGameCarnageReport) (*bool, error) {
+func isFresh(pgcr *DestinyPostGameCarnageReport) (*bool, error) {
 	var result *bool = nil
 
 	start, err := time.Parse(time.RFC3339, pgcr.Period)

@@ -2,14 +2,18 @@ package pgcr
 
 // There are more fields here than recorded in this file, but these are the only ones we care about
 
-type DestinyPostGameCarnageReportErrorCode struct {
-	ErrorCode int    `json:"ErrorCode"`
-	Message   string `json:"Message"`
+type DestinyPostGameCarnageReportError struct {
+	ErrorCode       int    `json:"ErrorCode"`
+	Message         string `json:"Message"`
+	ErrorStatus     string `json:"ErrorStatus"`
+	ThrottleSeconds int    `json:"ThrottleSeconds"`
 }
 
 type DestinyPostGameCarnageReportResponse struct {
-	Response  DestinyPostGameCarnageReport `json:"Response"`
-	ErrorCode int                          `json:"ErrorCode"`
+	Response        DestinyPostGameCarnageReport `json:"Response"`
+	ErrorCode       int                          `json:"ErrorCode"`
+	ErrorStatus     string                       `json:"ErrorStatus"`
+	ThrottleSeconds int                          `json:"ThrottleSeconds"`
 }
 
 type DestinyPostGameCarnageReport struct {

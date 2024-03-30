@@ -57,10 +57,11 @@ func run(numWorkers int, latestId int64, db *sql.DB) {
 	}()
 
 	consumerConfig := ConsumerConfig{
-		LatestId:        latestId,
-		GapMode:         false,
-		FailuresChannel: make(chan int64),
-		SuccessChannel:  make(chan int64),
+		LatestId:         latestId,
+		GapMode:          false,
+		FailuresChannel:  make(chan int64),
+		SuccessChannel:   make(chan int64),
+		MalformedChannel: make(chan int64),
 	}
 
 	sendStartUpAlert()
@@ -70,6 +71,9 @@ func run(numWorkers int, latestId int64, db *sql.DB) {
 
 	// Start a goroutine to consume found PGCRs from the gap mode channel
 	go consumeSuccesses(&consumerConfig)
+
+	// Start a goroutine to consume malformed PGCRs
+	go malformedWorker(consumerConfig.MalformedChannel, db)
 
 	for {
 		if !consumerConfig.GapMode {
@@ -94,7 +98,7 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 
 	for i := 0; i < countWorkers; i++ {
 		wg.Add(1)
-		go Worker(&wg, ids, resultsChannel, consumerConfig.FailuresChannel, db)
+		go Worker(&wg, ids, resultsChannel, consumerConfig.FailuresChannel, consumerConfig.MalformedChannel, db)
 	}
 
 	// Pass IDs to workers

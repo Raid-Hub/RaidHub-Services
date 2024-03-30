@@ -14,7 +14,7 @@ import (
 	"raidhub/shared/pgcr"
 )
 
-func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failuresChannel chan int64, db *sql.DB) {
+func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failuresChannel chan int64, malformedChannel chan int64, db *sql.DB) {
 	defer wg.Done()
 
 	securityKey := os.Getenv("BUNGIE_API_KEY")
@@ -32,7 +32,6 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 	for instanceID := range ch {
 		startTime := time.Now()
 		notFoundCount := 0
-		errorCount := 0
 		i := 0
 		var result pgcr.PGCRResult
 		var lag *time.Duration
@@ -66,7 +65,9 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 				logInsufficentPrivileges(instanceID, startTime)
 				break
 			} else if result == pgcr.BadFormat {
-				errorCount++
+				writeMissedLog(instanceID)
+				malformedChannel <- instanceID
+				break
 			}
 
 			// If we have not found the instance id after some time
@@ -77,11 +78,8 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 				break
 			} else if notFoundCount == numMissesForWarning {
 				logMissedInstanceWarning(instanceID, startTime)
-			} else if errorCount > 13 {
-				logMissedInstance(instanceID, startTime, false)
-				break
 			}
-			timeout := time.Duration((retryDelayTime-randomVariation+rand.Intn((2*randomVariation)+1))*(notFoundCount+errorCount)) * time.Millisecond
+			timeout := time.Duration((retryDelayTime - randomVariation + rand.Intn((2*randomVariation)+1))) * time.Millisecond
 			time.Sleep(timeout)
 			i++
 		}
@@ -91,7 +89,7 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 
 		monitoring.PGCRCrawlStatus.WithLabelValues(statusStr, attemptsStr).Inc()
 		if lag != nil {
-			monitoring.PGCRCrawlLag.WithLabelValues(statusStr, attemptsStr).Observe(float64(lag.Milliseconds()))
+			monitoring.PGCRCrawlLag.WithLabelValues(statusStr, attemptsStr).Observe(float64(lag.Seconds()))
 		}
 		monitoring.PGCRCrawlReqTime.WithLabelValues(statusStr, attemptsStr).Observe(float64(reqTime.Milliseconds()))
 

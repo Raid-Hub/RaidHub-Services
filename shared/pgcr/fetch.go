@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"raidhub/shared/monitoring"
-	"strconv"
 	"time"
 )
 
@@ -34,12 +33,19 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, baseUR
 	decoder := json.NewDecoder(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		var data DestinyPostGameCarnageReportErrorCode
+		var data DestinyPostGameCarnageReportError
 		if err := decoder.Decode(&data); err != nil {
 			log.Printf("Error decoding response for instanceId %d: %s", instanceID, err)
 			return BadFormat, nil
 		}
-		monitoring.BungieErrorCode.WithLabelValues(strconv.Itoa(data.ErrorCode)).Inc()
+		monitoring.BungieErrorCode.WithLabelValues(data.ErrorStatus).Inc()
+
+		defer func() {
+			if data.ThrottleSeconds > 0 {
+				log.Printf("Throttled: %d seconds", data.ThrottleSeconds)
+				time.Sleep(time.Duration(data.ThrottleSeconds) * time.Second)
+			}
+		}()
 
 		if data.ErrorCode == 1653 {
 			// PGCRNotFound
@@ -51,6 +57,10 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, baseUR
 			// SystemDisabled
 			time.Sleep(30 * time.Second)
 			return SystemDisabled, nil
+		} else if data.ErrorCode == 1672 {
+			// BabelTimeout
+			time.Sleep(5 * time.Second)
+			return NotFound, nil
 		} else if data.ErrorCode == 12 {
 			// InsufficientPrivileges, redacted
 			return InsufficientPrivileges, nil
@@ -64,7 +74,7 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, baseUR
 		log.Printf("Error decoding response for instanceId %d: %s", instanceID, err)
 		return BadFormat, nil
 	}
-	monitoring.BungieErrorCode.WithLabelValues(strconv.Itoa(data.ErrorCode)).Inc()
+	monitoring.BungieErrorCode.WithLabelValues(data.ErrorStatus).Inc()
 
 	if data.Response.ActivityDetails.Mode != 4 {
 		// Skip non raid
@@ -80,7 +90,7 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, baseUR
 		return NonRaid, &lag
 	}
 
-	pgcr, err := ProcessDestinyReport(data.Response)
+	pgcr, err := ProcessDestinyReport(&data.Response)
 	if err != nil {
 		return BadFormat, nil
 	}
