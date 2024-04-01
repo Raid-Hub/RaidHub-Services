@@ -11,11 +11,8 @@ const (
 	errorBufferSize    = 25
 
 	gapModeWorkers              = 500
-	decreaseBelow               = 40
-	increaseAbove               = 42
-	multiplicativeIncreaseAbove = 80
 
-	numMissesForWarning = 5
+	numMissesForWarning = 7
 	numMisses           = 10
 	retryDelayTime      = 5000
 )
