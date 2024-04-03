@@ -12,7 +12,8 @@ services:
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
     volumes:
-      - ../raidhub-postgres:/var/lib/postgresql/data
+      - ./raidhub-postgres:/var/lib/postgresql/data
+      - ../schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready raidhub -U ${POSTGRES_USER}"]
       interval: 5s
@@ -25,9 +26,5 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ../prometheus-data:/prometheus
+      - ./prometheus-data:/prometheus
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
-
-volumes:
-  raidhub-postgres:
-  prometheus-data:
