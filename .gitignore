@@ -1,8 +1,10 @@
 # Secrets
 .env
+prometheus.yml
 
 # Volumes
 raidhub-postgres
+prometheus-data
 
 # Binaries
 bin/

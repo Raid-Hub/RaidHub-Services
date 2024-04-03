@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 60s
+
+scrape_configs:
+  - job_name: "atlas"
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+
+remote_write:
+  - url: https://prometheus-prod-13-prod-us-east-0.grafana.net/api/prom/push
+    basic_auth:
+      username: "123456"
+      password: "password"

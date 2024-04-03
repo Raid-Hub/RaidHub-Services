@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"raidhub/shared/discord"
+	"raidhub/shared/monitoring"
 	"raidhub/shared/pgcr"
 	"raidhub/shared/postgres"
 )
@@ -53,6 +54,8 @@ func main() {
 		panic(err)
 	}
 	defer file.Close()
+
+	monitoring.RegisterPrometheus(9091)
 
 	// Create a map to store unique numbers
 	uniqueNumbers := make(map[int64]bool)

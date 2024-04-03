@@ -47,7 +47,6 @@ var PGCRCrawlReqTime = prometheus.NewHistogramVec(
 	[]string{"status", "attempts"},
 )
 
-// Port should be in range 9090-9093
 func RegisterPrometheus(port int) {
 	prometheus.MustRegister(BungieErrorCode)
 	prometheus.MustRegister(ActiveWorkers)

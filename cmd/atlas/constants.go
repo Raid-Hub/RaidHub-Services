@@ -10,7 +10,7 @@ const (
 	circularBufferSize = 50
 	errorBufferSize    = 25
 
-	gapModeWorkers              = 500
+	gapModeWorkers = 500
 
 	numMissesForWarning = 7
 	numMisses           = 10

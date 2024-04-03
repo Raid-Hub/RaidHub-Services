@@ -43,7 +43,7 @@ func main() {
 		log.Fatalf("Error getting latest instance id: %s", err)
 	}
 
-	monitoring.RegisterPrometheus(9090)
+	monitoring.RegisterPrometheus(8080)
 
 	run(numWorkersStart, instanceId, db)
 

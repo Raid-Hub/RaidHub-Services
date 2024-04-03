@@ -3,6 +3,7 @@ version: "3"
 services:
   postgres:
     image: postgres:13
+    container_name: postgres
     ports:
       - "${POSTGRES_PORT}:5432"
     environment:
@@ -10,12 +11,22 @@ services:
       POSTGRES_USER: "${POSTGRES_USER}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
     volumes:
-      - ./raidhub-postgres:/var/lib/postgresql/data
+      - ../raidhub-postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready raidhub -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../prometheus-data:/prometheus
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
 volumes:
   raidhub-postgres:
+  prometheus-data:
