@@ -6,6 +6,10 @@ scrape_configs:
     static_configs:
       - targets: ["host.docker.internal:8080"]
 
+  - job_name: "api"
+    static_configs:
+      - targets: ["host.docker.internal:8082"]
+
 remote_write:
   - url: https://prometheus-prod-13-prod-us-east-0.grafana.net/api/prom/push
     basic_auth:
