@@ -79,7 +79,7 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 			} else if notFoundCount == numMissesForWarning {
 				logMissedInstanceWarning(instanceID, startTime)
 			}
-			timeout := time.Duration((retryDelayTime - randomVariation + rand.Intn((2*randomVariation)+1))) * time.Millisecond
+			timeout := time.Duration((retryDelayTime - randomVariation + rand.Intn((2*randomVariation)*(i+1)))) * time.Millisecond
 			time.Sleep(timeout)
 			i++
 		}

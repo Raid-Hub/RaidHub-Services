@@ -6,7 +6,7 @@ services:
     image: postgres:13
     container_name: postgres
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: "raidhub"
       POSTGRES_USER: "${POSTGRES_USER}"
@@ -24,7 +24,24 @@ services:
     image: prom/prometheus
     container_name: prometheus
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - ./prometheus-data:/prometheus
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  rabbitmq:
+    image: rabbitmq:3.8
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD}"
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_UI_PORT:-15672}:15672"
+    volumes:
+      - ./rabbitmq-data:/var/lib/rabbitmq
+
+volumes:
+  rabbitmq-data:
+  prometheus-data:
+  raidhub-postgres:

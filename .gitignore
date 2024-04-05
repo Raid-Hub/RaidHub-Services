@@ -5,6 +5,7 @@ prometheus.yml
 # Volumes
 raidhub-postgres
 prometheus-data
+rabbitmq-data
 
 # Binaries
 bin/
