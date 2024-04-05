@@ -34,7 +34,7 @@ func UpsertFullPlayer(tx *sql.Tx, player *Player) error {
 			DO UPDATE SET
 				membership_type = COALESCE(player.membership_type, EXCLUDED.membership_type),
 				icon_path = CASE 
-					WHEN EXCLUDED.last_seen > player.last_seen THEN EXCLUDED.icon_path
+					WHEN EXCLUDED.last_seen > player.last_seen THEN COALESCE(EXCLUDED.icon_path, player.icon_path)
 					ELSE player.icon_path
 				END,
 				display_name = CASE 
