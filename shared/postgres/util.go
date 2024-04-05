@@ -1,6 +1,8 @@
 package postgres
 
-import "database/sql"
+import (
+	"database/sql"
+)
 
 func GetLatestInstanceId(db *sql.DB, buffer int64) (int64, error) {
 	var latestID int64

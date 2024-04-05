@@ -63,6 +63,7 @@ CREATE TABLE "player" (
     "fresh_clears" INTEGER NOT NULL DEFAULT 0,
     "sherpas" INTEGER NOT NULL DEFAULT 0,
     "sum_of_best" INTEGER,
+    "last_crawled" TIMESTAMP(3),
 
     CONSTRAINT "player_pkey" PRIMARY KEY ("membership_id")
 );

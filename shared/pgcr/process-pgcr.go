@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"raidhub/shared/bungie"
+	"raidhub/shared/postgres"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -30,18 +31,7 @@ type ProcessedPlayerActivity struct {
 	Assists           int
 	TimePlayedSeconds int
 	ClassHash         *uint32
-	Player            ProcessedPlayer
-}
-
-type ProcessedPlayer struct {
-	LastSeen                    time.Time
-	MembershipId                int64
-	Full                        bool
-	MembershipType              *int
-	IconPath                    *string
-	DisplayName                 *string
-	BungieGlobalDisplayName     *string
-	BungieGlobalDisplayNameCode *string
+	Player            postgres.Player
 }
 
 func ProcessDestinyReport(report *DestinyPostGameCarnageReport) (*ProcessedActivity, error) {
@@ -150,7 +140,7 @@ func ProcessDestinyReport(report *DestinyPostGameCarnageReport) (*ProcessedActiv
 			*processedPlayerActivity.Player.DisplayName = *destinyUserInfo.DisplayName
 			if destinyUserInfo.BungieGlobalDisplayNameCode != nil {
 				processedPlayerActivity.Player.BungieGlobalDisplayNameCode = new(string)
-				*processedPlayerActivity.Player.BungieGlobalDisplayNameCode = *fixCode(destinyUserInfo.BungieGlobalDisplayNameCode)
+				*processedPlayerActivity.Player.BungieGlobalDisplayNameCode = *bungie.FixBungieGlobalDisplayNameCode(destinyUserInfo.BungieGlobalDisplayNameCode)
 				if destinyUserInfo.BungieGlobalDisplayName != nil && *destinyUserInfo.BungieGlobalDisplayName != "" {
 					processedPlayerActivity.Player.BungieGlobalDisplayName = new(string)
 					*processedPlayerActivity.Player.BungieGlobalDisplayName = *destinyUserInfo.BungieGlobalDisplayName
@@ -287,16 +277,4 @@ func isFresh(pgcr *DestinyPostGameCarnageReport) (*bool, error) {
 	}
 
 	return result, nil
-}
-
-func fixCode(code *int) *string {
-	if code == nil {
-		return nil
-	} else {
-		str := strconv.Itoa(*code)
-		missingZeroes := 4 - len(str)
-
-		var returnValue string = strings.Repeat("0", missingZeroes) + str
-		return &returnValue
-	}
 }

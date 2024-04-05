@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"raidhub/shared/bungie"
 	"raidhub/shared/monitoring"
 	"time"
 )
@@ -33,7 +34,7 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, baseUR
 	decoder := json.NewDecoder(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		var data DestinyPostGameCarnageReportError
+		var data bungie.BungieError
 		if err := decoder.Decode(&data); err != nil {
 			log.Printf("Error decoding response for instanceId %d: %s", instanceID, err)
 			return BadFormat, nil
