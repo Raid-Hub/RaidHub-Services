@@ -33,9 +33,9 @@ func process_request(request *PlayerRequest, db *sql.DB) {
 	if err != nil {
 		log.Printf("Failed to get player: %s", err)
 		return
-	} else if membershipType == -1 {
+	} else if membershipType == -1 || membershipType == 0 {
 		log.Println("Crawling missing player", request.MembershipId)
-		crawl_player_profiles(request.MembershipId, -1, db)
+		crawl_player_profiles(request.MembershipId, db)
 	} else if lastCrawled == nil || time.Since(*lastCrawled) > 24*time.Hour {
 		log.Println("Crawling potentially stale player", request.MembershipId)
 		crawl_membership(membershipType, request.MembershipId, db)
@@ -59,8 +59,8 @@ func get_player(membershipId string, db *sql.DB) (int, *time.Time, error) {
 	}
 }
 
-func crawl_player_profiles(destinyMembershipId string, membershipType int, db *sql.DB) {
-	profiles, err := bungie.GetLinkedProfiles(membershipType, destinyMembershipId)
+func crawl_player_profiles(destinyMembershipId string, db *sql.DB) {
+	profiles, err := bungie.GetLinkedProfiles(-1, destinyMembershipId)
 	if err != nil {
 		log.Printf("Failed to get linked profiles: %s", err)
 	} else if len(profiles) == 0 {
@@ -71,10 +71,10 @@ func crawl_player_profiles(destinyMembershipId string, membershipType int, db *s
 	var wg sync.WaitGroup
 	for _, profile := range profiles {
 		wg.Add(1)
-		go func(membershipId string) {
+		go func(membershipId string, membershipType int) {
 			defer wg.Done()
 			crawl_membership(membershipType, membershipId, db)
-		}(profile.MembershipId)
+		}(profile.MembershipId, profile.MembershipType)
 	}
 
 	wg.Wait()
@@ -83,7 +83,7 @@ func crawl_player_profiles(destinyMembershipId string, membershipType int, db *s
 func crawl_membership(membershipType int, membershipId string, db *sql.DB) {
 	profile, err := bungie.GetProfile(membershipType, membershipId)
 	if err != nil {
-		log.Printf("Failed to get profile: %s", err)
+		log.Printf("Failed to get profile %d/%s: %s", membershipType, membershipId, err)
 		return
 	}
 
