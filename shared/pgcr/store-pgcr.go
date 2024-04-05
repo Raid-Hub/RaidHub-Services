@@ -88,36 +88,10 @@ func StorePGCR(pgcr *ProcessedActivity, raw *DestinyPostGameCarnageReport, postg
 			completedDictionary[playerActivity.Player.MembershipId] = playerRaidClearCount > 0
 		}
 
-		// handle various player response types, full and partial
-		if playerActivity.Player.Full {
-			if err := postgres.UpsertFullPlayer(tx, &playerActivity.Player); err != nil {
-				log.Printf("Error inserting player (full) %d into DB for instanceId %d: %s",
-					playerActivity.Player.MembershipId, pgcr.InstanceId, err)
-				return nil, false, err
-			}
-		} else {
-			// handle the partial response
-			_, err := tx.Exec(`
-			INSERT INTO player (
-				"membership_id",
-				"last_seen"
-			)
-			VALUES (
-				$1, $2
-			)
-			ON CONFLICT (membership_id)
-			DO UPDATE SET
-				last_seen = CASE 
-					WHEN EXCLUDED.last_seen > player.last_seen THEN EXCLUDED.last_seen
-					ELSE player.last_seen
-				END;
-			`, playerActivity.Player.MembershipId, playerActivity.Player.LastSeen)
-
-			if err != nil {
-				log.Printf("Error inserting player (partial) %d into DB for instanceId %d: %s",
-					playerActivity.Player.MembershipId, pgcr.InstanceId, err)
-				return nil, false, err
-			}
+		if _, err := postgres.UpsertPlayer(tx, &playerActivity.Player); err != nil {
+			log.Printf("Error inserting player %d into DB for instanceId %d: %s",
+				playerActivity.Player.MembershipId, pgcr.InstanceId, err)
+			return nil, false, err
 		}
 
 		_, err = tx.Exec(`

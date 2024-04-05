@@ -131,7 +131,6 @@ func ProcessDestinyReport(report *DestinyPostGameCarnageReport) (*ProcessedActiv
 		processedPlayerActivity.Player.LastSeen = startDate
 		processedPlayerActivity.Player.MembershipId = membershipId
 		if destinyUserInfo.MembershipType != 0 {
-			processedPlayerActivity.Player.Full = true
 			processedPlayerActivity.Player.MembershipType = new(int)
 			*processedPlayerActivity.Player.MembershipType = destinyUserInfo.MembershipType
 			processedPlayerActivity.Player.IconPath = new(string)
@@ -150,8 +149,6 @@ func ProcessDestinyReport(report *DestinyPostGameCarnageReport) (*ProcessedActiv
 				processedPlayerActivity.ClassHash = new(uint32)
 				*processedPlayerActivity.ClassHash = classHash
 			}
-		} else {
-			processedPlayerActivity.Player.Full = false
 		}
 
 		processedPlayerActivities = append(processedPlayerActivities, processedPlayerActivity)

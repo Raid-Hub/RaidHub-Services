@@ -13,11 +13,10 @@ type Player struct {
 	DisplayName                 *string
 	BungieGlobalDisplayName     *string
 	BungieGlobalDisplayNameCode *string
-	Full                        bool
 }
 
-func UpsertFullPlayer(tx *sql.Tx, player *Player) error {
-	_, err := tx.Exec(`
+func UpsertPlayer(tx *sql.Tx, player *Player) (sql.Result, error) {
+	return tx.Exec(`
 			INSERT INTO player (
 				"membership_id",
 				"membership_type",
@@ -38,15 +37,15 @@ func UpsertFullPlayer(tx *sql.Tx, player *Player) error {
 					ELSE player.icon_path
 				END,
 				display_name = CASE 
-					WHEN EXCLUDED.last_seen > player.last_seen THEN EXCLUDED.display_name
+					WHEN EXCLUDED.last_seen > player.last_seen THEN COALESCE(EXCLUDED.display_name, player.display_name)
 					ELSE player.display_name
 				END,
 				bungie_global_display_name = CASE 
-					WHEN EXCLUDED.last_seen > player.last_seen THEN EXCLUDED.bungie_global_display_name
+					WHEN EXCLUDED.last_seen > player.last_seen THEN COALESCE(EXCLUDED.bungie_global_display_name, player.bungie_global_display_name)
 					ELSE player.bungie_global_display_name
 				END,
 				bungie_global_display_name_code = CASE 
-					WHEN EXCLUDED.last_seen > player.last_seen THEN EXCLUDED.bungie_global_display_name_code
+					WHEN EXCLUDED.last_seen > player.last_seen THEN COALESCE(EXCLUDED.bungie_global_display_name_code, player.bungie_global_display_name_code)
 					ELSE player.bungie_global_display_name_code
 				END,
 				last_seen = CASE 
@@ -56,5 +55,4 @@ func UpsertFullPlayer(tx *sql.Tx, player *Player) error {
 			`,
 		player.MembershipId, player.MembershipType, player.IconPath, player.DisplayName,
 		player.BungieGlobalDisplayName, player.BungieGlobalDisplayNameCode, player.LastSeen)
-	return err
 }
