@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -74,16 +73,7 @@ func main() {
 	}
 
 	// Handle incoming messages
-	go func() {
-		for msg := range msgs {
-			var request PlayerRequest
-			if err := json.Unmarshal(msg.Body, &request); err != nil {
-				log.Printf("Failed to unmarshal message: %s", err)
-				continue
-			}
-			processRequest(&request, db)
-		}
-	}()
+	go process_queue(msgs, db)
 
 	monitoring.RegisterPrometheus(8083)
 

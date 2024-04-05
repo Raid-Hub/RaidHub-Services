@@ -1,9 +1,11 @@
+default: bin
+
+# Go Binaries
 GO_BUILD = go build
 BINARIES = ./bin
 COMMANDS = ./cmd
 
-# Go Binaries
-.PHONY: bin atlas
+.PHONY: bin atlas hermes
 bin:
 	$(GO_BUILD) -o $(BINARIES)/ $(COMMANDS)/...
 
@@ -13,10 +15,13 @@ atlas:
 hades:
 	$(GO_BUILD) -o $(BINARIES)/hades $(COMMANDS)/hades
 
+hermes:
+	$(GO_BUILD) -o $(BINARIES)/hermes $(COMMANDS)/hermes
+
 # Docker
 DOCKER_COMPOSE = docker-compose -f docker/docker-compose.yml --env-file ./.env
-.PHONY: up down postgres prometheus
 
+.PHONY: up down postgres prometheus
 up:
 	$(DOCKER_COMPOSE) up -d 
 
@@ -28,4 +33,7 @@ postgres:
 
 prometheus:
 	$(DOCKER_COMPOSE) up -d prometheus
+
+rabbitmq:
+	$(DOCKER_COMPOSE) up -d rabbitmq
 	

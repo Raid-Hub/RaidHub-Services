@@ -3,6 +3,7 @@ package pgcr
 import (
 	"database/sql"
 	"log"
+	"raidhub/shared/postgres"
 	"time"
 
 	"github.com/lib/pq"
@@ -89,47 +90,7 @@ func StorePGCR(pgcr *ProcessedActivity, raw *DestinyPostGameCarnageReport, postg
 
 		// handle various player response types, full and partial
 		if playerActivity.Player.Full {
-			_, err = tx.Exec(`
-			INSERT INTO player (
-				"membership_id",
-				"membership_type",
-				"icon_path",
-				"display_name",
-				"bungie_global_display_name",
-				"bungie_global_display_name_code",
-				"last_seen"
-			)
-			VALUES (
-				$1, $2, $3, $4, $5, $6, $7
-			)
-			ON CONFLICT (membership_id)
-			DO UPDATE SET
-				membership_type = COALESCE(player.membership_type, EXCLUDED.membership_type),
-				icon_path = CASE 
-					WHEN EXCLUDED.last_seen > player.last_seen THEN EXCLUDED.icon_path
-					ELSE player.icon_path
-				END,
-				display_name = CASE 
-					WHEN EXCLUDED.last_seen > player.last_seen THEN EXCLUDED.display_name
-					ELSE player.display_name
-				END,
-				bungie_global_display_name = CASE 
-					WHEN EXCLUDED.last_seen > player.last_seen THEN EXCLUDED.bungie_global_display_name
-					ELSE player.bungie_global_display_name
-				END,
-				bungie_global_display_name_code = CASE 
-					WHEN EXCLUDED.last_seen > player.last_seen THEN EXCLUDED.bungie_global_display_name_code
-					ELSE player.bungie_global_display_name_code
-				END,
-				last_seen = CASE 
-					WHEN EXCLUDED.last_seen > player.last_seen THEN EXCLUDED.last_seen
-					ELSE player.last_seen
-				END;
-			`, playerActivity.Player.MembershipId, playerActivity.Player.MembershipType,
-				playerActivity.Player.IconPath, playerActivity.Player.DisplayName, playerActivity.Player.BungieGlobalDisplayName,
-				playerActivity.Player.BungieGlobalDisplayNameCode, playerActivity.Player.LastSeen)
-
-			if err != nil {
+			if err := postgres.UpsertFullPlayer(tx, &playerActivity.Player); err != nil {
 				log.Printf("Error inserting player (full) %d into DB for instanceId %d: %s",
 					playerActivity.Player.MembershipId, pgcr.InstanceId, err)
 				return nil, false, err
