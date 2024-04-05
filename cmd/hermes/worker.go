@@ -122,32 +122,28 @@ func crawl_membership(membershipType int, membershipId string, db *sql.DB) {
 		return
 	}
 
-	var mostRecentCharacter *bungie.DestinyCharacterComponent = nil
-	var mostRecentDate *time.Time = nil
+	var iconPath *string = nil
+	var mostRecentDate time.Time = time.Time{}
 	for _, character := range *profile.Characters.Data {
 		dateLastPlayed, err := time.Parse(time.RFC3339, character.DateLastPlayed)
 		if err != nil {
 			continue
 		}
 
-		if mostRecentCharacter == nil || mostRecentDate == nil || dateLastPlayed.After(*mostRecentDate) {
-			mostRecentCharacter = &character
-			mostRecentDate = &dateLastPlayed
+		if iconPath == nil || dateLastPlayed.After(mostRecentDate) {
+			iconPath = &character.EmblemPath
+			mostRecentDate = dateLastPlayed
 		}
-	}
-	if mostRecentCharacter == nil {
-		log.Println("No characters found")
-		return
 	}
 
 	_, err = postgres.UpsertPlayer(tx, &postgres.Player{
 		MembershipId:                membershipIdInt64,
 		MembershipType:              &userInfo.MembershipType,
-		IconPath:                    &mostRecentCharacter.EmblemPath,
+		IconPath:                    iconPath,
 		DisplayName:                 userInfo.DisplayName,
 		BungieGlobalDisplayName:     bungieGlobalDisplayName,
 		BungieGlobalDisplayNameCode: bungieGlobalDisplayNameCodeStr,
-		LastSeen:                    *mostRecentDate,
+		LastSeen:                    mostRecentDate,
 	})
 	if err != nil {
 		log.Printf("Failed to upsert full player: %s", err)
