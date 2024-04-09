@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"raidhub/shared/pgcr"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func gapModeWorker(wg *sync.WaitGroup, ch chan int64, foundChannel chan int64, db *sql.DB) {
+func gapModeWorker(wg *sync.WaitGroup, ch chan int64, foundChannel chan int64, db *sql.DB, channel *amqp.Channel) {
 	defer wg.Done()
 	securityKey := os.Getenv("BUNGIE_API_KEY")
 	proxy := os.Getenv("PGCR_URL_BASE")
@@ -27,7 +29,7 @@ func gapModeWorker(wg *sync.WaitGroup, ch chan int64, foundChannel chan int64, d
 		i := 0
 		for {
 			reqStartTime := time.Now()
-			result, lag := pgcr.FetchAndStorePGCR(client, instanceID, db, proxy, securityKey)
+			result, lag := pgcr.FetchAndStorePGCR(client, instanceID, db, channel, proxy, securityKey)
 			if result == pgcr.Success {
 				endTime := time.Now()
 				workerTime := endTime.Sub(startTime).Milliseconds()

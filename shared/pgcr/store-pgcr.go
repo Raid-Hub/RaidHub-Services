@@ -3,14 +3,17 @@ package pgcr
 import (
 	"database/sql"
 	"log"
+	"raidhub/shared/async/player_crawl"
+	"raidhub/shared/bungie"
 	"raidhub/shared/postgres"
 	"time"
 
 	"github.com/lib/pq"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // Returns lag, is_new, err
-func StorePGCR(pgcr *ProcessedActivity, raw *DestinyPostGameCarnageReport, postgresDb *sql.DB) (*time.Duration, bool, error) {
+func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport, postgresDb *sql.DB, channel *amqp.Channel) (*time.Duration, bool, error) {
 	// Identify the raid which this PGCR belongs to
 	var raidId int
 	err := postgresDb.QueryRow(`SELECT raid_id FROM raid_definition WHERE hash = $1`, pgcr.RaidHash).Scan(&raidId)
@@ -86,6 +89,13 @@ func StorePGCR(pgcr *ProcessedActivity, raw *DestinyPostGameCarnageReport, postg
 
 		if playerActivity.DidFinish {
 			completedDictionary[playerActivity.Player.MembershipId] = playerRaidClearCount > 0
+		}
+
+		if playerActivity.Player.MembershipType == nil || *playerActivity.Player.MembershipType == 0 {
+			err = player_crawl.SendPlayerCrawlMessage(channel, playerActivity.Player.MembershipId)
+			if err != nil {
+				log.Fatalf("Failed to send player crawl request: %s", err)
+			}
 		}
 
 		if _, err := postgres.UpsertPlayer(tx, &playerActivity.Player); err != nil {

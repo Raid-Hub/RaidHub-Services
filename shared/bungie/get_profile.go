@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"raidhub/shared/monitoring"
 	"time"
 )
 
-type ProfilesBungieResponse struct {
+type GetProfilesResponse struct {
 	Response        DestinyProfileResponse `json:"Response"`
 	ErrorCode       int                    `json:"ErrorCode"`
 	ErrorStatus     string                 `json:"ErrorStatus"`
@@ -26,7 +25,7 @@ type SingleComponentResponseOfDestinyProfileComponent struct {
 }
 
 type DestinyProfileComponent struct {
-	UserInfo UserInfoCard `json:"userInfo"`
+	UserInfo DestinyUserInfo `json:"userInfo"`
 }
 
 type DictionaryComponentResponseOfint64AndDestinyCharacterComponent struct {
@@ -62,7 +61,6 @@ func GetProfile(membershipType int, membershipId string) (*DestinyProfileRespons
 		if err := decoder.Decode(&data); err != nil {
 			return nil, err
 		}
-		monitoring.BungieErrorCode.WithLabelValues(data.ErrorStatus).Inc()
 
 		defer func() {
 			if data.ThrottleSeconds > 0 {
@@ -73,7 +71,7 @@ func GetProfile(membershipType int, membershipId string) (*DestinyProfileRespons
 		return nil, fmt.Errorf("error response: %s (%d)", data.Message, data.ErrorCode)
 	}
 
-	var data ProfilesBungieResponse
+	var data GetProfilesResponse
 	if err := decoder.Decode(&data); err != nil {
 		return nil, err
 	}

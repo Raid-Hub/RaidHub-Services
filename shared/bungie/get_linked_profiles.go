@@ -5,26 +5,25 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"raidhub/shared/monitoring"
 	"time"
 )
 
-type LinkedProfilesBungieResponse struct {
-	Response        LinkedProfilesResponse `json:"Response"`
-	ErrorCode       int                    `json:"ErrorCode"`
-	ErrorStatus     string                 `json:"ErrorStatus"`
-	ThrottleSeconds int                    `json:"ThrottleSeconds"`
-}
-
 type LinkedProfilesResponse struct {
-	Profiles []UserInfoCard `json:"profiles"`
+	Response        LinkedProfiles `json:"Response"`
+	ErrorCode       int            `json:"ErrorCode"`
+	ErrorStatus     string         `json:"ErrorStatus"`
+	ThrottleSeconds int            `json:"ThrottleSeconds"`
 }
 
-func GetLinkedProfiles(membershipType int, membershipId string) ([]UserInfoCard, error) {
+type LinkedProfiles struct {
+	Profiles []DestinyUserInfo `json:"profiles"`
+}
+
+func GetLinkedProfiles(membershipType int, membershipId string) ([]DestinyUserInfo, error) {
 	url := fmt.Sprintf("https://www.bungie.net/Platform/Destiny2/%d/Profile/%s/LinkedProfiles/?getAllMemberships=true", membershipType, membershipId)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return []UserInfoCard{}, err
+		return []DestinyUserInfo{}, err
 	}
 
 	apiKey := os.Getenv("BUNGIE_API_KEY") // Read the API key from the BUNGIE_API_KEY environment variable
@@ -32,7 +31,7 @@ func GetLinkedProfiles(membershipType int, membershipId string) ([]UserInfoCard,
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return []UserInfoCard{}, err
+		return []DestinyUserInfo{}, err
 	}
 	defer resp.Body.Close()
 
@@ -41,9 +40,8 @@ func GetLinkedProfiles(membershipType int, membershipId string) ([]UserInfoCard,
 	if resp.StatusCode != http.StatusOK {
 		var data BungieError
 		if err := decoder.Decode(&data); err != nil {
-			return []UserInfoCard{}, err
+			return []DestinyUserInfo{}, err
 		}
-		monitoring.BungieErrorCode.WithLabelValues(data.ErrorStatus).Inc()
 
 		defer func() {
 			if data.ThrottleSeconds > 0 {
@@ -51,12 +49,12 @@ func GetLinkedProfiles(membershipType int, membershipId string) ([]UserInfoCard,
 			}
 		}()
 
-		return []UserInfoCard{}, fmt.Errorf("error response: %s (%d)", data.Message, data.ErrorCode)
+		return []DestinyUserInfo{}, fmt.Errorf("error response: %s (%d)", data.Message, data.ErrorCode)
 	}
 
-	var data LinkedProfilesBungieResponse
+	var data LinkedProfilesResponse
 	if err := decoder.Decode(&data); err != nil {
-		return []UserInfoCard{}, err
+		return []DestinyUserInfo{}, err
 	}
 
 	return data.Response.Profiles, nil

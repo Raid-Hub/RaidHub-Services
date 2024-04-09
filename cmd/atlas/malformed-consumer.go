@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"raidhub/shared/pgcr"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func malformedWorker(ch chan int64, db *sql.DB) {
+func malformedWorker(ch chan int64, rabbitChannel *amqp.Channel, db *sql.DB) {
 	securityKey := os.Getenv("BUNGIE_API_KEY")
 	proxy := os.Getenv("PGCR_URL_BASE")
 
@@ -21,7 +23,7 @@ func malformedWorker(ch chan int64, db *sql.DB) {
 		go func(instanceId int64) {
 			startTime := time.Now()
 			for i := 1; i <= 5; i++ {
-				result, lag := pgcr.FetchAndStorePGCR(client, instanceId, db, proxy, securityKey)
+				result, lag := pgcr.FetchAndStorePGCR(client, instanceId, db, rabbitChannel, proxy, securityKey)
 
 				if result == pgcr.AlreadyExists || result == pgcr.NonRaid {
 					break

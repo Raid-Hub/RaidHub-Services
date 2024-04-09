@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"raidhub/shared/bungie"
 	"strings"
 )
 
-func StoreJSON(report *DestinyPostGameCarnageReport, db *sql.DB) error {
+func StoreJSON(report *bungie.DestinyPostGameCarnageReport, db *sql.DB) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return err
@@ -74,7 +75,7 @@ func gzipCompress(data []byte) ([]byte, error) {
 	return []byte(b.String()), nil
 }
 
-func RetrieveJSON(instanceId int64, db *sql.DB) (*DestinyPostGameCarnageReport, error) {
+func RetrieveJSON(instanceId int64, db *sql.DB) (*bungie.DestinyPostGameCarnageReport, error) {
 	var compressedData []byte
 	row := db.QueryRow(`SELECT data FROM pgcr WHERE instance_id = $1`, instanceId)
 
@@ -90,7 +91,7 @@ func RetrieveJSON(instanceId int64, db *sql.DB) (*DestinyPostGameCarnageReport, 
 	}
 
 	// Unmarshal the JSON back to a struct
-	var data DestinyPostGameCarnageReport
+	var data bungie.DestinyPostGameCarnageReport
 	err = json.Unmarshal(decompressedJSON, &data)
 	if err != nil {
 		return nil, err

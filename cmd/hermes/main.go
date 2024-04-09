@@ -1,84 +1,20 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"os"
+	"raidhub/shared/async/activity_history"
+	"raidhub/shared/async/bonus_pgcr"
+	"raidhub/shared/async/player_crawl"
 	"raidhub/shared/monitoring"
-	"raidhub/shared/postgres"
-
-	"github.com/joho/godotenv"
-	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
-	// Set up RabbitMQ connection
-	username := os.Getenv("RABBITMQ_USER")
-	password := os.Getenv("RABBITMQ_PASSWORD")
-	port := os.Getenv("RABBITMQ_PORT")
-
-	if username == "" || password == "" || port == "" {
-		log.Fatalf("Environment variables RABBITMQ_USER, RABBITMQ_PASSWORD, or RABBITMQ_PORT are not set")
-	}
-
-	rabbitURL := fmt.Sprintf("amqp://%s:%s@localhost:%s/", username, password, port)
-	conn, err := amqp.Dial(rabbitURL)
-	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %s", err)
-	}
-	defer conn.Close()
-
-	ch, err := conn.Channel()
-	if err != nil {
-		log.Fatalf("Failed to open a channel: %s", err)
-	}
-	defer ch.Close()
-
-	// Declare the queue
-	queueName := "player_requests"
-	q, err := ch.QueueDeclare(
-		queueName,
-		false,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		log.Fatalf("Failed to declare a queue: %s", err)
-	}
-
-	// Set up PostgreSQL connection
-	db, err := postgres.Connect()
-	if err != nil {
-		log.Fatalf("Error connecting to the database: %s", err)
-	}
-	defer db.Close()
-
-	msgs, err := ch.Consume(
-		q.Name,
-		"",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		log.Fatalf("Failed to register a consumer: %s", err)
-	}
-
-	// Handle incoming messages
-	go process_queue(msgs, db)
+	go player_crawl.Register(3)
+	go bonus_pgcr.Register(10)
+	go activity_history.Register(4)
 
 	monitoring.RegisterPrometheus(8083)
 
 	// Keep the main thread running
-	log.Println("Waiting for messages...")
 	forever := make(chan bool)
 	<-forever
 }

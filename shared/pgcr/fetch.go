@@ -2,12 +2,13 @@ package pgcr
 
 import (
 	"database/sql"
-	"encoding/json"
 	"log"
 	"net/http"
 	"raidhub/shared/bungie"
 	"raidhub/shared/monitoring"
 	"time"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type PGCRResult int
@@ -23,17 +24,15 @@ const (
 	InternalError          PGCRResult = 7
 )
 
-func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, baseURL string, apiKey string) (PGCRResult, *time.Duration) {
-	resp, err := getPGCR(client, baseURL, instanceID, apiKey)
+func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, channel *amqp.Channel, baseURL string, apiKey string) (PGCRResult, *time.Duration) {
+	decoder, statusCode, cleanup, err := bungie.GetPGCR(client, baseURL, instanceID, apiKey)
 	if err != nil {
 		log.Printf("Error fetching instanceId %d: %s", instanceID, err)
 		return InternalError, nil
 	}
-	defer resp.Body.Close()
+	defer cleanup()
 
-	decoder := json.NewDecoder(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
+	if statusCode != http.StatusOK {
 		var data bungie.BungieError
 		if err := decoder.Decode(&data); err != nil {
 			log.Printf("Error decoding response for instanceId %d: %s", instanceID, err)
@@ -70,7 +69,7 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, baseUR
 		return BadFormat, nil
 	}
 
-	var data DestinyPostGameCarnageReportResponse
+	var data bungie.DestinyPostGameCarnageReportResponse
 	if err := decoder.Decode(&data); err != nil {
 		log.Printf("Error decoding response for instanceId %d: %s", instanceID, err)
 		return BadFormat, nil
@@ -96,7 +95,7 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, baseUR
 		return BadFormat, nil
 	}
 
-	lag, committed, err := StorePGCR(pgcr, &data.Response, db)
+	lag, committed, err := StorePGCR(pgcr, &data.Response, db, channel)
 	if err != nil {
 		log.Println(err)
 		return InternalError, nil

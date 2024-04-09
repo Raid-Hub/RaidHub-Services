@@ -1,4 +1,4 @@
-package main
+package player_crawl
 
 import (
 	"database/sql"
@@ -13,31 +13,34 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-type PlayerRequest struct {
-	MembershipId string `json:"membershipId"`
-}
-
 func process_queue(msgs <-chan amqp.Delivery, db *sql.DB) {
 	for msg := range msgs {
-		var request PlayerRequest
-		if err := json.Unmarshal(msg.Body, &request); err != nil {
-			log.Printf("Failed to unmarshal message: %s", err)
-			continue
-		}
-		process_request(&request, db)
+		process_request(&msg, db)
 	}
 }
 
-func process_request(request *PlayerRequest, db *sql.DB) {
+func process_request(msg *amqp.Delivery, db *sql.DB) {
+	defer func() {
+		if err := msg.Ack(false); err != nil {
+			log.Printf("Failed to acknowledge message: %v", err)
+		}
+	}()
+
+	var request PlayerRequest
+	if err := json.Unmarshal(msg.Body, &request); err != nil {
+		log.Printf("Failed to unmarshal message: %s", err)
+		return
+	}
+
 	membershipType, lastCrawled, err := get_player(request.MembershipId, db)
 	if err != nil {
 		log.Printf("Failed to get player: %s", err)
 		return
 	} else if membershipType == -1 || membershipType == 0 {
-		log.Println("Crawling missing player", request.MembershipId)
+		log.Printf("Crawling missing player %s", request.MembershipId)
 		crawl_player_profiles(request.MembershipId, db)
 	} else if lastCrawled == nil || time.Since(*lastCrawled) > 24*time.Hour {
-		log.Println("Crawling potentially stale player", request.MembershipId)
+		log.Printf("Crawling potentially stale player %d/%s", membershipType, request.MembershipId)
 		crawl_membership(membershipType, request.MembershipId, db)
 	}
 }
@@ -45,7 +48,7 @@ func process_request(request *PlayerRequest, db *sql.DB) {
 func get_player(membershipId string, db *sql.DB) (int, *time.Time, error) {
 	var membershipType int
 	var lastCrawled sql.NullTime
-	err := db.QueryRow(`SELECT membership_type, last_crawled FROM player WHERE membership_id = $1 LIMIT 1`, membershipId).Scan(&membershipType, &lastCrawled)
+	err := db.QueryRow(`SELECT COALESCE(membership_type, 0), last_crawled FROM player WHERE membership_id = $1 LIMIT 1`, membershipId).Scan(&membershipType, &lastCrawled)
 	if err == sql.ErrNoRows {
 		return -1, nil, nil
 	} else if err != nil {

@@ -68,23 +68,24 @@ CREATE TABLE "player" (
     CONSTRAINT "player_pkey" PRIMARY KEY ("membership_id")
 );
 
-CREATE OR REPLACE FUNCTION bungie_name(p player) RETURNS VARCHAR AS $$
-BEGIN
-  RETURN CASE
-           WHEN p.bungie_global_display_name IS NOT NULL AND p.bungie_global_display_name_code IS NOT NULL THEN
-             CONCAT(p.bungie_global_display_name, '#', p.bungie_global_display_name_code)
-           ELSE
-             NULL
-         END;
-END;
-$$ LANGUAGE plpgsql;
+-- Add a computed column with concatenation, handling NULL values
+ALTER TABLE "player"
+ADD COLUMN "bungie_name" TEXT GENERATED ALWAYS AS (
+    CASE
+        WHEN "bungie_global_display_name" IS NOT NULL AND "bungie_global_display_name_code" IS NOT NULL THEN
+            "bungie_global_display_name" || '#' || "bungie_global_display_name_code"
+        ELSE
+            "display_name"
+    END
+) STORED;
+ALTER TABLE "player"
+ADD COLUMN "_search_score" NUMERIC GENERATED ALWAYS AS (
+    sqrt("clears") * GREATEST(0, EXTRACT(EPOCH FROM ("last_seen" - TIMESTAMP '2017-08-27'))) / 1000000
+) STORED;
 
-CREATE EXTENSION pg_trgm;
 -- Player Search Indices
-CREATE INDEX "trgm_idx_both_display_names" ON "player" USING GIN ("display_name" gin_trgm_ops, "bungie_global_display_name" gin_trgm_ops);
-CREATE INDEX "trgm_idx_bungie_global_display_name" ON "player" USING GIN ("bungie_global_display_name" gin_trgm_ops);
-CREATE INDEX "trgm_idx_bungie_global_name_and_code" ON "player" USING GIN ("bungie_global_display_name" gin_trgm_ops, "bungie_global_display_name_code" gin_trgm_ops);
-CREATE INDEX "trgm_idx_display_name" ON "player" USING GIN ("display_name" gin_trgm_ops);
+CREATE INDEX "primary_search_idx" ON "player" (lower("bungie_name") text_pattern_ops, "_search_score" DESC);
+CREATE INDEX "secondary_search_idx" ON "player" (lower("display_name") text_pattern_ops, "_search_score" DESC);
 
 CREATE TABLE "player_activity" (
     "instance_id" BIGINT NOT NULL,
