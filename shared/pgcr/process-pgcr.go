@@ -34,7 +34,7 @@ type ProcessedPlayerActivity struct {
 	Player            postgres.Player
 }
 
-func ProcessDestinyReport(report *DestinyPostGameCarnageReport) (*ProcessedActivity, error) {
+func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*ProcessedActivity, error) {
 	startDate, err := time.Parse(time.RFC3339, report.Period)
 	if err != nil {
 		return nil, err
@@ -57,13 +57,13 @@ func ProcessDestinyReport(report *DestinyPostGameCarnageReport) (*ProcessedActiv
 		return nil, errors.New("malformed pgcr: no one had any duration_seconds")
 	}
 
-	players := make(map[string][]DestinyPostGameCarnageReportEntry)
+	players := make(map[string][]bungie.DestinyPostGameCarnageReportEntry)
 
 	for _, e := range report.Entries {
 		if val, ok := players[e.Player.DestinyUserInfo.MembershipId]; ok {
 			players[e.Player.DestinyUserInfo.MembershipId] = append(val, e)
 		} else {
-			players[e.Player.DestinyUserInfo.MembershipId] = []DestinyPostGameCarnageReportEntry{e}
+			players[e.Player.DestinyUserInfo.MembershipId] = []bungie.DestinyPostGameCarnageReportEntry{e}
 		}
 	}
 
@@ -204,7 +204,7 @@ func ProcessDestinyReport(report *DestinyPostGameCarnageReport) (*ProcessedActiv
 	return &result, nil
 }
 
-func CalculateDurationSeconds(startDate time.Time, entry DestinyPostGameCarnageReportEntry) int {
+func CalculateDurationSeconds(startDate time.Time, entry bungie.DestinyPostGameCarnageReportEntry) int {
 
 	durationValue, durationExists := entry.Values["activityDurationSeconds"]
 	if durationExists {
@@ -213,7 +213,7 @@ func CalculateDurationSeconds(startDate time.Time, entry DestinyPostGameCarnageR
 	return 0
 }
 
-func CalculateDateCompleted(startDate time.Time, entry DestinyPostGameCarnageReportEntry) time.Time {
+func CalculateDateCompleted(startDate time.Time, entry bungie.DestinyPostGameCarnageReportEntry) time.Time {
 
 	durationValue, durationExists := entry.Values["activityDurationSeconds"]
 	if durationExists {
@@ -240,7 +240,7 @@ var leviHashes = map[uint32]bool{
 }
 
 // isFresh checks if a DestinyPostGameCarnageReportData is considered fresh based on the period start time.
-func isFresh(pgcr *DestinyPostGameCarnageReport) (*bool, error) {
+func isFresh(pgcr *bungie.DestinyPostGameCarnageReport) (*bool, error) {
 	var result *bool = nil
 
 	start, err := time.Parse(time.RFC3339, pgcr.Period)

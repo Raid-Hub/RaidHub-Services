@@ -9,6 +9,7 @@ import (
 
 	"raidhub/shared/discord"
 	"raidhub/shared/monitoring"
+	"raidhub/shared/pgcr"
 )
 
 var (
@@ -102,7 +103,7 @@ func logWorkersStarting(numWorkers int, latestId int64) {
 }
 
 func logMissedInstance(instanceId int64, startTime time.Time, gapMode bool) {
-	writeMissedLog(instanceId)
+	pgcr.WriteMissedLog(instanceId)
 	if !gapMode {
 		webhook := discord.Webhook{
 			Embeds: []discord.Embed{{

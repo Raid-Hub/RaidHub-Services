@@ -12,9 +12,11 @@ import (
 
 	"raidhub/shared/monitoring"
 	"raidhub/shared/pgcr"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failuresChannel chan int64, malformedChannel chan int64, db *sql.DB) {
+func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failuresChannel chan int64, malformedChannel chan int64, rabbitChannel *amqp.Channel, db *sql.DB) {
 	defer wg.Done()
 
 	securityKey := os.Getenv("BUNGIE_API_KEY")
@@ -39,7 +41,7 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 		for {
 			cb = cb % circularBufferSize
 			reqStartTime := time.Now()
-			result, lag = pgcr.FetchAndStorePGCR(client, instanceID, db, proxy, securityKey)
+			result, lag = pgcr.FetchAndStorePGCR(client, instanceID, db, rabbitChannel, proxy, securityKey)
 
 			if lag != nil {
 				behindHead[cb] = lag.Seconds()
@@ -65,7 +67,7 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 				logInsufficentPrivileges(instanceID, startTime)
 				break
 			} else if result == pgcr.BadFormat {
-				writeMissedLog(instanceID)
+				pgcr.WriteMissedLog(instanceID)
 				malformedChannel <- instanceID
 				break
 			}

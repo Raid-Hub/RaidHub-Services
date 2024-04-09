@@ -15,3 +15,6 @@ bin/
 
 # OS
 .DS_Store
+
+# tmp
+cmd/tmp

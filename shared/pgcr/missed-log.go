@@ -1,4 +1,4 @@
-package main
+package pgcr
 
 import (
 	"bufio"
@@ -27,7 +27,7 @@ func createLogsDirIfNotExist() {
 
 }
 
-func writeMissedLog(instanceId int64) {
+func WriteMissedLog(instanceId int64) {
 	onceCreateLog.Do(createLogsDirIfNotExist)
 
 	// Open the file in append mode with write permissions

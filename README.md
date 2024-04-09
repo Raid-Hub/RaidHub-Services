@@ -17,9 +17,11 @@ This tool just processes any missed PGCRs, usually on a cron job
 - `make postgres` - Run Postgres Database in Docker
 - `make atlas` - Build the Atlas PGCR crawler binary
 - `make hades` - Build the Hades binary
+- `make hermes` - Build the message queue worker
 - `make bin` - Build all Go binaries
 
 ### Run
 
 - `bin/atlas <workers>` - Run the PGCR crawler
 - `bin/hades` - Run the missed PGCR collector
+- `bin/hermes` - Run the message queue worker

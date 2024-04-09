@@ -12,6 +12,7 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"raidhub/shared/async"
 	"raidhub/shared/monitoring"
 	"raidhub/shared/postgres"
 )
@@ -56,12 +57,22 @@ func run(numWorkers int, latestId int64, db *sql.DB) {
 		}
 	}()
 
+	conn, err := async.Init()
+	defer async.Cleanup()
+
+	rabbitChannel, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("Failed to create channel: %s", err)
+	}
+	defer rabbitChannel.Close()
+
 	consumerConfig := ConsumerConfig{
 		LatestId:         latestId,
 		GapMode:          false,
 		FailuresChannel:  make(chan int64),
 		SuccessChannel:   make(chan int64),
 		MalformedChannel: make(chan int64),
+		RabbitChannel:    rabbitChannel,
 	}
 
 	sendStartUpAlert()
@@ -73,7 +84,7 @@ func run(numWorkers int, latestId int64, db *sql.DB) {
 	go consumeSuccesses(&consumerConfig)
 
 	// Start a goroutine to consume malformed PGCRs
-	go malformedWorker(consumerConfig.MalformedChannel, db)
+	go malformedWorker(consumerConfig.MalformedChannel, consumerConfig.RabbitChannel, db)
 
 	for {
 		if !consumerConfig.GapMode {
@@ -98,7 +109,7 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 
 	for i := 0; i < countWorkers; i++ {
 		wg.Add(1)
-		go Worker(&wg, ids, resultsChannel, consumerConfig.FailuresChannel, consumerConfig.MalformedChannel, db)
+		go Worker(&wg, ids, resultsChannel, consumerConfig.FailuresChannel, consumerConfig.MalformedChannel, consumerConfig.RabbitChannel, db)
 	}
 
 	// Pass IDs to workers
@@ -164,7 +175,7 @@ func spawnGapModeWorkers(db *sql.DB, consumerConfig *ConsumerConfig) {
 
 	for i := 0; i < gapModeWorkers; i++ {
 		wg.Add(1)
-		go gapModeWorker(&wg, ids, consumerConfig.SuccessChannel, db)
+		go gapModeWorker(&wg, ids, consumerConfig.SuccessChannel, db, consumerConfig.RabbitChannel)
 	}
 
 	misses := 0

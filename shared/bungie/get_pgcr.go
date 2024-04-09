@@ -1,4 +1,31 @@
-package pgcr
+package bungie
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+)
+
+const (
+	bungieURL = "/Platform/Destiny2/Stats/PostGameCarnageReport"
+)
+
+func GetPGCR(client *http.Client, baseURL string, instanceId int64, apiKey string) (*json.Decoder, int, func(), error) {
+	instanceUrl := fmt.Sprintf("%s%s/%d/", baseURL, bungieURL, instanceId)
+	req, _ := http.NewRequest("GET", instanceUrl, nil)
+	req.Header.Set("X-API-KEY", apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, -1, nil, err
+	}
+
+	decoder := json.NewDecoder(resp.Body)
+	return decoder, resp.StatusCode, func() {
+		resp.Body.Close()
+	}, nil
+
+}
 
 // There are more fields here than recorded in this file, but these are the only ones we care about
 type DestinyPostGameCarnageReportResponse struct {
@@ -15,22 +42,15 @@ type DestinyPostGameCarnageReport struct {
 	ActivityWasStartedFromBeginning bool                                `json:"activityWasStartedFromBeginning"`
 	Entries                         []DestinyPostGameCarnageReportEntry `json:"entries"`
 }
-type DestinyHistoricalStatsActivity struct {
-	InstanceId           string `json:"instanceId"`
-	Mode                 int    `json:"mode"`
-	Modes                []int  `json:"modes"`
-	MembershipType       int    `json:"membershipType"`
-	DirectorActivityHash uint32 `json:"directorActivityHash"`
-}
 
 type DestinyPostGameCarnageReportEntry struct {
-	Player      Player                                   `json:"player"`
+	Player      DestinyPostGameCarnageReportPlayer       `json:"player"`
 	CharacterId string                                   `json:"characterId"`
 	Values      DestinyHistoricalStatsMap                `json:"values"`
 	Extended    DestinyPostGameCarnageReportExtendedData `json:"extended"`
 }
 
-type Player struct {
+type DestinyPostGameCarnageReportPlayer struct {
 	DestinyUserInfo DestinyUserInfo `json:"destinyUserInfo"`
 	ClassHash       uint32          `json:"classHash"`
 	CharacterClass  *string         `json:"characterClass"`
@@ -39,17 +59,6 @@ type Player struct {
 	CharacterLevel  int             `json:"characterLevel"`
 	LightLevel      int             `json:"lightLevel"`
 	EmblemHash      uint32          `json:"emblemHash"`
-}
-
-type DestinyUserInfo struct {
-	IconPath                    *string `json:"iconPath"`
-	CrossSaveOverride           int     `json:"crossSaveOverride"`
-	ApplicableMembershipTypes   []int   `json:"applicableMembershipTypes"`
-	MembershipType              int     `json:"membershipType"`
-	MembershipId                string  `json:"membershipId"`
-	DisplayName                 *string `json:"displayName"`
-	BungieGlobalDisplayName     *string `json:"bungieGlobalDisplayName"`
-	BungieGlobalDisplayNameCode *int    `json:"bungieGlobalDisplayNameCode"`
 }
 
 type DestinyPostGameCarnageReportExtendedData struct {

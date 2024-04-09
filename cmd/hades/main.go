@@ -13,10 +13,13 @@ import (
 	"sync"
 	"time"
 
+	"raidhub/shared/async"
 	"raidhub/shared/discord"
 	"raidhub/shared/monitoring"
 	"raidhub/shared/pgcr"
 	"raidhub/shared/postgres"
+
+	"github.com/rabbitmq/amqp091-go"
 )
 
 const (
@@ -94,6 +97,18 @@ func main() {
 	}
 	defer db.Close()
 
+	conn, err := async.Init()
+	if err != nil {
+		log.Fatalf("Error connecting to rabbit: %s", err)
+	}
+	defer async.Cleanup()
+
+	rabbitChannel, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("Failed to create channel: %s", err)
+	}
+	defer rabbitChannel.Close()
+
 	var found []int64
 	var failed []int64
 	if len(numbers) > 0 {
@@ -107,7 +122,7 @@ func main() {
 		log.Printf("Workers starting at %d", latestID)
 		for i := 0; i < numWorkers; i++ {
 			wg.Add(1)
-			go worker(ch, successes, failures, db, &wg)
+			go worker(ch, successes, failures, db, rabbitChannel, &wg)
 		}
 
 		go func() {
@@ -142,7 +157,7 @@ func main() {
 	webhook(len(numbers), len(failed), len(found))
 }
 
-func worker(ch chan int64, successes chan int64, failures chan int64, db *sql.DB, wg *sync.WaitGroup) {
+func worker(ch chan int64, successes chan int64, failures chan int64, db *sql.DB, rabbitChannel *amqp091.Channel, wg *sync.WaitGroup) {
 	defer wg.Done()
 	securityKey := os.Getenv("BUNGIE_API_KEY")
 	proxy := os.Getenv("PGCR_URL_BASE")
@@ -150,7 +165,7 @@ func worker(ch chan int64, successes chan int64, failures chan int64, db *sql.DB
 	client := &http.Client{}
 
 	for instanceID := range ch {
-		result, _ := pgcr.FetchAndStorePGCR(client, instanceID, db, proxy, securityKey)
+		result, _ := pgcr.FetchAndStorePGCR(client, instanceID, db, rabbitChannel, proxy, securityKey)
 
 		if result == pgcr.NonRaid || result == pgcr.AlreadyExists {
 			log.Printf("Duplicate or non raid %d", instanceID)
