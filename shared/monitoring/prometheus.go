@@ -9,14 +9,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Track the count of each Bungie error code returned by the API
-var BungieErrorCode = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Name: "bungie_error_status",
-	},
-	[]string{"error_status"},
-)
-
 // Track the number of active workers
 var ActiveWorkers = prometheus.NewGauge(
 	prometheus.GaugeOpts{
@@ -34,12 +26,12 @@ var PGCRCrawlStatus = prometheus.NewCounterVec(
 var PGCRCrawlLag = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "pgcr_crawl_summary_lag",
-		Buckets: []float64{5, 15, 25, 30, 35, 40, 45, 60, 90, 300, 1800, 14400},
+		Buckets: []float64{5, 15, 25, 30, 35, 40, 45, 60, 90, 300, 1800, 14400, 86400},
 	},
 	[]string{"status", "attempts"},
 )
 
-var PGCRCrawlReqTime = prometheus.NewHistogramVec(
+var PGCRCrawlTime = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "pgcr_crawl_summary_req_time",
 		Buckets: []float64{100, 200, 300, 400, 500, 600, 700, 800, 1000, 1200, 1500, 2000, 5000, 10000},
@@ -47,12 +39,21 @@ var PGCRCrawlReqTime = prometheus.NewHistogramVec(
 	[]string{"status", "attempts"},
 )
 
+var GetPostGameCarnageReportRequest = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "get_pgcr_req",
+		Buckets: []float64{10, 20, 50, 100, 150, 200, 250, 300, 500, 750, 1000, 1500, 2000, 5000},
+	},
+	[]string{"status"},
+)
+
+// Track the count of each Bungie error code returned by the API
 func RegisterPrometheus(port int) {
-	prometheus.MustRegister(BungieErrorCode)
 	prometheus.MustRegister(ActiveWorkers)
 	prometheus.MustRegister(PGCRCrawlLag)
-	prometheus.MustRegister(PGCRCrawlReqTime)
+	prometheus.MustRegister(PGCRCrawlTime)
 	prometheus.MustRegister(PGCRCrawlStatus)
+	prometheus.MustRegister(GetPostGameCarnageReportRequest)
 
 	http.Handle("/metrics", promhttp.Handler())
 

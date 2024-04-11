@@ -34,6 +34,7 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 	for instanceID := range ch {
 		startTime := time.Now()
 		notFoundCount := 0
+		errCount := 0
 		i := 0
 		var result pgcr.PGCRResult
 		var lag *time.Duration
@@ -58,7 +59,10 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 				reqTime = endTime.Sub(reqStartTime)
 				log.Printf("Added PGCR with instanceId %d (%d / %d / %d / %.0f)", instanceID, i, workerTime, reqTime.Milliseconds(), lag.Seconds())
 				break
-			} else if result == pgcr.NotFound || result == pgcr.InternalError {
+			} else if result == pgcr.InternalError {
+				errCount++
+				time.Sleep(3 * time.Second)
+			} else if result == pgcr.NotFound {
 				notFoundCount++
 			} else if result == pgcr.SystemDisabled {
 				time.Sleep(30 * time.Second)
@@ -73,7 +77,7 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 			}
 
 			// If we have not found the instance id after some time
-			if notFoundCount >= numMisses {
+			if notFoundCount >= numMisses || errCount > 5 {
 				log.Printf("Could not find instance id %d a total of %d times, logging it to the file", instanceID, notFoundCount)
 				failuresChannel <- instanceID
 				logMissedInstance(instanceID, startTime, false)
@@ -93,7 +97,6 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 		if lag != nil {
 			monitoring.PGCRCrawlLag.WithLabelValues(statusStr, attemptsStr).Observe(float64(lag.Seconds()))
 		}
-		monitoring.PGCRCrawlReqTime.WithLabelValues(statusStr, attemptsStr).Observe(float64(reqTime.Milliseconds()))
 
 		// Track the number of not founds for this worker
 		totalWorkerNotFounds += notFoundCount

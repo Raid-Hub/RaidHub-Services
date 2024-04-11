@@ -28,6 +28,7 @@ func create_outbound_channel() {
 }
 
 func process_queue(msgs <-chan amqp.Delivery, db *sql.DB) {
+	db.Close() // Not needed
 	create_outbound_channel()
 	for msg := range msgs {
 		process_request(&msg)

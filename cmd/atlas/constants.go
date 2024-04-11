@@ -1,12 +1,9 @@
 package main
 
 const (
-	startBuffer int64 = 10_000
-
 	minWorkers = 5
 	maxWorkers = 200
 
-	periodLength       = 25_000
 	circularBufferSize = 50
 	errorBufferSize    = 25
 

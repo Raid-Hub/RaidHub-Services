@@ -25,6 +25,7 @@ const (
 )
 
 func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, channel *amqp.Channel, baseURL string, apiKey string) (PGCRResult, *time.Duration) {
+	start := time.Now()
 	decoder, statusCode, cleanup, err := bungie.GetPGCR(client, baseURL, instanceID, apiKey)
 	if err != nil {
 		log.Printf("Error fetching instanceId %d: %s", instanceID, err)
@@ -38,7 +39,7 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, channe
 			log.Printf("Error decoding response for instanceId %d: %s", instanceID, err)
 			return BadFormat, nil
 		}
-		monitoring.BungieErrorCode.WithLabelValues(data.ErrorStatus).Inc()
+		monitoring.GetPostGameCarnageReportRequest.WithLabelValues(data.ErrorStatus).Observe(float64(time.Since(start).Milliseconds()))
 
 		defer func() {
 			if data.ThrottleSeconds > 0 {
@@ -74,7 +75,7 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, channe
 		log.Printf("Error decoding response for instanceId %d: %s", instanceID, err)
 		return BadFormat, nil
 	}
-	monitoring.BungieErrorCode.WithLabelValues(data.ErrorStatus).Inc()
+	monitoring.GetPostGameCarnageReportRequest.WithLabelValues(data.ErrorStatus).Observe(float64(time.Since(start).Milliseconds()))
 
 	if data.Response.ActivityDetails.Mode != 4 {
 		// Skip non raid

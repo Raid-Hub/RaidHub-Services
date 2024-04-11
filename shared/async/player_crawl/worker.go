@@ -134,7 +134,8 @@ func crawl_membership(membershipType int, membershipId string, db *sql.DB) {
 		}
 
 		if iconPath == nil || dateLastPlayed.After(mostRecentDate) {
-			iconPath = &character.EmblemPath
+			icon := character.EmblemPath
+			iconPath = &icon
 			mostRecentDate = dateLastPlayed
 		}
 	}
