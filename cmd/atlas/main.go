@@ -2,12 +2,10 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
+	"flag"
 	"log"
 	"math"
-	"os"
 	"sort"
-	"strconv"
 	"sync"
 
 	"github.com/joho/godotenv"
@@ -17,20 +15,23 @@ import (
 	"raidhub/shared/postgres"
 )
 
-// bin/atlas <numWorkersStart>
+var (
+	numWorkers   = flag.Int("workers", 50, "number of workers to spawn at the start")
+	buffer       = flag.Int64("buffer", 10_000, "number of ids to start behind last added")
+	workers      = 0
+	periodLength = 50_000
+)
+
+// bin/atlas <numWorkersStart> <offset>
 func main() {
+	flag.Parse()
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file")
 	}
 
-	if len(os.Args) < 2 {
-		fmt.Println("Please specify the number of workers to start with.")
-		return
-	}
-
-	numWorkersStart, err := strconv.Atoi(os.Args[1])
-	if err != nil {
-		log.Fatalf("Error parsing integer for numConcurrentFiles: %s", err)
+	workers = *numWorkers
+	if *buffer < 0 || workers <= 0 || workers > maxWorkers {
+		log.Fatalln("Invalid flags")
 	}
 
 	db, err := postgres.Connect()
@@ -39,18 +40,18 @@ func main() {
 	}
 	defer db.Close()
 
-	instanceId, err := postgres.GetLatestInstanceId(db, startBuffer)
+	instanceId, err := postgres.GetLatestInstanceId(db, *buffer)
 	if err != nil {
 		log.Fatalf("Error getting latest instance id: %s", err)
 	}
 
 	monitoring.RegisterPrometheus(8080)
 
-	run(numWorkersStart, instanceId, db)
+	run(instanceId, db)
 
 }
 
-func run(numWorkers int, latestId int64, db *sql.DB) {
+func run(latestId int64, db *sql.DB) {
 	defer func() {
 		if r := recover(); r != nil {
 			handlePanic(r)
@@ -58,6 +59,9 @@ func run(numWorkers int, latestId int64, db *sql.DB) {
 	}()
 
 	conn, err := async.Init()
+	if err != nil {
+		log.Fatalf("Failed to create connection: %s", err)
+	}
 	defer async.Cleanup()
 
 	rabbitChannel, err := conn.Channel()
@@ -88,11 +92,11 @@ func run(numWorkers int, latestId int64, db *sql.DB) {
 
 	for {
 		if !consumerConfig.GapMode {
-			numWorkers = spawnWorkers(numWorkers, db, &consumerConfig)
+			workers = spawnWorkers(workers, db, &consumerConfig)
 		} else {
 			spawnGapModeWorkers(db, &consumerConfig)
 			// When exiting gap mode, we should increase the number of workers to catch up
-			numWorkers = maxWorkers
+			workers = maxWorkers
 		}
 	}
 
@@ -102,7 +106,7 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 	var wg sync.WaitGroup
 	ids := make(chan int64, 5)
 
-	logWorkersStarting(countWorkers, consumerConfig.LatestId)
+	logWorkersStarting(countWorkers, periodLength, consumerConfig.LatestId)
 
 	// When each worker finishes, it will send its info onto these channels
 	resultsChannel := make(chan *WorkerResult, countWorkers)
@@ -150,15 +154,22 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 
 	newWorkers := 0
 	if fractionNotFound == 0 {
+		// how much we expect to get catch up
+		periodLength = countWorkers * 4 * (int(math.Ceil(medianLag)) - 30) / 3
+		if periodLength < 10_000 {
+			periodLength = 10_000
+		}
 		// If we aren't getting 404's, just spike the workers up to ensure we catch up to live ASAP
 		newWorkers = int(math.Ceil(float64(countWorkers) * (1 + float64(medianLag-30)/100)))
+
 	} else {
-		decreaseFraction := (retryDelayTime / 800 * (fractionNotFound - 0.025)) // do not let workers go below 2.5%
+		decreaseFraction := (retryDelayTime / 800 * (fractionNotFound - 0.032)) // do not let workers go below 3.2%
 		if decreaseFraction > 0.8 {
 			decreaseFraction = 0.8
 		}
 		// Adjust number of workers for the next period
 		newWorkers = int(math.Round(float64(countWorkers) - decreaseFraction*float64(countWorkers)))
+		periodLength = 500 * newWorkers
 	}
 
 	if newWorkers > maxWorkers {

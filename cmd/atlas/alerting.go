@@ -80,7 +80,7 @@ func logIntervalState(medianLag float64, countWorkers int, percentNotFound float
 	log.Printf("Info: Head is behind by %1.f seconds with %.3f%% not found using %d workers ", medianLag, percentNotFound, countWorkers)
 }
 
-func logWorkersStarting(numWorkers int, latestId int64) {
+func logWorkersStarting(numWorkers int, period int, latestId int64) {
 	monitoring.ActiveWorkers.Set(float64(numWorkers))
 
 	webhook := discord.Webhook{
@@ -90,6 +90,9 @@ func logWorkersStarting(numWorkers int, latestId int64) {
 			Fields: []discord.Field{{
 				Name:  "Count",
 				Value: fmt.Sprintf("%d", numWorkers),
+			}, {
+				Name:  "Period",
+				Value: fmt.Sprintf("%d", period),
 			}, {
 				Name:  "Current Instance Id",
 				Value: fmt.Sprintf("`%d`", latestId),

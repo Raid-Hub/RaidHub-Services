@@ -11,19 +11,22 @@ CREATE TABLE "raid_version" (
     "name" TEXT NOT NULL,
     "associated_raid_id" INTEGER,
 
-    CONSTRAINT "raid_version_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "raid_version_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "raid_version_associated_raid_id_fkey" FOREIGN KEY ("associated_raid_id") REFERENCES "raid"("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
-ALTER TABLE "raid_version" ADD CONSTRAINT "raid_version_associated_raid_id_fkey" FOREIGN KEY ("associated_raid_id") REFERENCES "raid"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE "raid_version" ADD 
 
 CREATE TABLE "raid_definition" (
     "hash" BIGINT NOT NULL,
     "raid_id" INTEGER NOT NULL,
     "version_id" INTEGER NOT NULL,
 
-    CONSTRAINT "raid_definition_pkey" PRIMARY KEY ("hash")
+    CONSTRAINT "raid_definition_pkey" PRIMARY KEY ("hash"),
+    CONSTRAINT "raid_definition_raid_id_fkey" FOREIGN KEY ("raid_id") REFERENCES "raid"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "raid_definition_version_id_fkey" FOREIGN KEY ("version_id") REFERENCES "raid_version"("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
-ALTER TABLE "raid_definition" ADD CONSTRAINT "raid_definition_raid_id_fkey" FOREIGN KEY ("raid_id") REFERENCES "raid"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "raid_definition" ADD CONSTRAINT "raid_definition_version_id_fkey" FOREIGN KEY ("version_id") REFERENCES "raid_version"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
 CREATE INDEX "idx_raid_definition_raid_id" ON "raid_definition"("raid_id");
 CREATE INDEX "idx_raid_definition_version_id" ON "raid_definition"("version_id");
 
@@ -39,9 +42,9 @@ CREATE TABLE "activity" (
     "duration" INTEGER NOT NULL,
     "platform_type" INTEGER NOT NULL,
 
-    CONSTRAINT "activity_pkey" PRIMARY KEY ("instance_id")
+    CONSTRAINT "activity_pkey" PRIMARY KEY ("instance_id"),
+    CONSTRAINT "activity_raid_hash_fkey" FOREIGN KEY ("raid_hash") REFERENCES "raid_definition"("hash") ON DELETE NO ACTION ON UPDATE NO ACTION
 );
-ALTER TABLE "activity" ADD CONSTRAINT "activity_raid_hash_fkey" FOREIGN KEY ("raid_hash") REFERENCES "raid_definition"("hash") ON DELETE NO ACTION ON UPDATE NO ACTION;
 -- Raid Completion Leaderboard
 CREATE INDEX "idx_raidhash_date_completed" ON "activity"("raid_hash", "date_completed");
 -- Recent Activity
@@ -58,30 +61,26 @@ CREATE TABLE "player" (
     "display_name" TEXT,
     "bungie_global_display_name" TEXT,
     "bungie_global_display_name_code" TEXT,
+    "bungie_name" TEXT GENERATED ALWAYS AS (
+        CASE
+            WHEN "bungie_global_display_name" IS NOT NULL AND "bungie_global_display_name_code" IS NOT NULL THEN
+                "bungie_global_display_name" || '#' || "bungie_global_display_name_code"
+            ELSE
+                "display_name"
+        END
+    ) STORED, 
     "last_seen" TIMESTAMP(3) NOT NULL,
     "clears" INTEGER NOT NULL DEFAULT 0,
     "fresh_clears" INTEGER NOT NULL DEFAULT 0,
     "sherpas" INTEGER NOT NULL DEFAULT 0,
     "sum_of_best" INTEGER,
     "last_crawled" TIMESTAMP(3),
+    "_search_score" NUMERIC GENERATED ALWAYS AS (
+        sqrt("clears" + 1) * power(2, GREATEST(0, EXTRACT(EPOCH FROM ("last_seen" - TIMESTAMP '2017-08-27'))) / 20000000)
+    ) STORED;
 
     CONSTRAINT "player_pkey" PRIMARY KEY ("membership_id")
 );
-
--- Add a computed column with concatenation, handling NULL values
-ALTER TABLE "player"
-ADD COLUMN "bungie_name" TEXT GENERATED ALWAYS AS (
-    CASE
-        WHEN "bungie_global_display_name" IS NOT NULL AND "bungie_global_display_name_code" IS NOT NULL THEN
-            "bungie_global_display_name" || '#' || "bungie_global_display_name_code"
-        ELSE
-            "display_name"
-    END
-) STORED;
-ALTER TABLE "player"
-ADD COLUMN "_search_score" NUMERIC GENERATED ALWAYS AS (
-    sqrt("clears") * GREATEST(0, EXTRACT(EPOCH FROM ("last_seen" - TIMESTAMP '2017-08-27'))) / 1000000
-) STORED;
 
 -- Player Search Indices
 CREATE INDEX "primary_search_idx" ON "player" (lower("bungie_name") text_pattern_ops, "_search_score" DESC);
@@ -99,10 +98,10 @@ CREATE TABLE "player_activity" (
     "sherpas" INTEGER NOT NULL DEFAULT 0,
     "is_first_clear" BOOLEAN NOT NULL DEFAULT false,
 
-    CONSTRAINT "player_activity_instance_id_membership_id_pkey" PRIMARY KEY ("instance_id","membership_id")
+    CONSTRAINT "player_activity_instance_id_membership_id_pkey" PRIMARY KEY ("instance_id","membership_id"),
+    CONSTRAINT "player_activity_instance_id_fkey" FOREIGN KEY ("instance_id") REFERENCES "activity"("instance_id") ON DELETE RESTRICT ON UPDATE NO ACTION,
+    CONSTRAINT "player_activity_membership_id_fkey" FOREIGN KEY ("membership_id") REFERENCES "player"("membership_id") ON DELETE RESTRICT ON UPDATE NO ACTION
 );
-ALTER TABLE "player_activity" ADD CONSTRAINT "player_activity_instance_id_fkey" FOREIGN KEY ("instance_id") REFERENCES "activity"("instance_id") ON DELETE CASCADE ON UPDATE NO ACTION;
-ALTER TABLE "player_activity" ADD CONSTRAINT "player_activity_membership_id_fkey" FOREIGN KEY ("membership_id") REFERENCES "player"("membership_id") ON DELETE RESTRICT ON UPDATE NO ACTION;
 CREATE INDEX "idx_instance_id" ON "player_activity"("instance_id");
 CREATE INDEX "idx_membership_id" ON "player_activity"("membership_id");
 
@@ -117,11 +116,11 @@ CREATE TABLE "player_stats" (
     "solos" INTEGER NOT NULL DEFAULT 0,
     "fastest_instance_id" BIGINT,
 
-    CONSTRAINT "player_stats_pkey" PRIMARY KEY ("membership_id","raid_id")
+    CONSTRAINT "player_stats_pkey" PRIMARY KEY ("membership_id","raid_id"),
+    CONSTRAINT "raid_id_fkey" FOREIGN KEY ("raid_id") REFERENCES "raid"("id") ON DELETE RESTRICT ON UPDATE NO ACTION,
+    CONSTRAINT "player_membership_id_fkey" FOREIGN KEY ("membership_id") REFERENCES "player"("membership_id") ON DELETE RESTRICT ON UPDATE NO ACTION,
+    CONSTRAINT "player_stats_fastest_instance_id_fkey" FOREIGN KEY ("fastest_instance_id") REFERENCES "activity"("instance_id") ON DELETE SET NULL ON UPDATE CASCADE
 );
-ALTER TABLE "player_stats" ADD CONSTRAINT "raid_id_fkey" FOREIGN KEY ("raid_id") REFERENCES "raid"("id") ON DELETE RESTRICT ON UPDATE NO ACTION;
-ALTER TABLE "player_stats" ADD CONSTRAINT "player_membership_id_fkey" FOREIGN KEY ("membership_id") REFERENCES "player"("membership_id") ON DELETE RESTRICT ON UPDATE NO ACTION;
-ALTER TABLE "player_stats" ADD CONSTRAINT "player_stats_fastest_instance_id_fkey" FOREIGN KEY ("fastest_instance_id") REFERENCES "activity"("instance_id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 CREATE TYPE "WorldFirstLeaderboardType" AS ENUM ('Normal', 'Challenge', 'Prestige', 'Master');
 CREATE TABLE "leaderboard" (
@@ -154,6 +153,7 @@ CREATE INDEX "activity_leaderboard_position" ON "activity_leaderboard_entry"("le
 CREATE TABLE "pgcr" (
     "instance_id" BIGINT NOT NULL,
     "data" BYTEA NOT NULL,
+    "date_crawled" TIMESTAMP DEFAULT NOW(),
 
     CONSTRAINT "pgcr_pkey" PRIMARY KEY ("instance_id")
 );

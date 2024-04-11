@@ -5,7 +5,7 @@ GO_BUILD = go build
 BINARIES = ./bin
 COMMANDS = ./cmd
 
-.PHONY: bin atlas hermes
+.PHONY: bin atlas hades hermes zeus
 bin:
 	$(GO_BUILD) -o $(BINARIES)/ $(COMMANDS)/...
 
@@ -17,6 +17,9 @@ hades:
 
 hermes:
 	$(GO_BUILD) -o $(BINARIES)/hermes $(COMMANDS)/hermes
+
+zeus:
+	$(GO_BUILD) -o $(BINARIES)/zeus $(COMMANDS)/zeus
 
 # Docker
 DOCKER_COMPOSE = docker-compose -f docker/docker-compose.yml --env-file ./.env
