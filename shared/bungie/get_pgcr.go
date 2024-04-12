@@ -44,11 +44,26 @@ type DestinyPostGameCarnageReport struct {
 }
 
 type DestinyPostGameCarnageReportEntry struct {
-	Player      DestinyPostGameCarnageReportPlayer       `json:"player"`
-	CharacterId string                                   `json:"characterId"`
-	Values      DestinyHistoricalStatsMap                `json:"values"`
-	Extended    DestinyPostGameCarnageReportExtendedData `json:"extended"`
+	Player      DestinyPostGameCarnageReportPlayer        `json:"player"`
+	CharacterId string                                    `json:"characterId"`
+	Values      map[string]DestinyHistoricalStatsValue    `json:"values"`
+	Extended    *DestinyPostGameCarnageReportExtendedData `json:"extended"`
+	Score       DestinyHistoricalStatsValuePair           `json:"score"`
 }
+
+// type DestinyPostGameCarnageReportEntryValues struct {
+// 	Assists                 *DestinyHistoricalStatsValue `json:"assists"`
+// 	Completed               *DestinyHistoricalStatsValue `json:"completed"`
+// 	Deaths                  *DestinyHistoricalStatsValue `json:"deaths"`
+// 	Kills                   *DestinyHistoricalStatsValue `json:"kills"`
+// 	Score                   *DestinyHistoricalStatsValue `json:"score"`
+// 	ActivityDurationSeconds *DestinyHistoricalStatsValue `json:"activityDurationSeconds"`
+// 	CompletionReason        *DestinyHistoricalStatsValue `json:"completionReason"`
+// 	StartSeconds            *DestinyHistoricalStatsValue `json:"startSeconds"`
+// 	TimePlayedSeconds       *DestinyHistoricalStatsValue `json:"timePlayedSeconds"`
+// 	PlayerCount             *DestinyHistoricalStatsValue `json:"playerCount"`
+// 	TeamScore               *DestinyHistoricalStatsValue `json:"teamScore"`
+// }
 
 type DestinyPostGameCarnageReportPlayer struct {
 	DestinyUserInfo DestinyUserInfo `json:"destinyUserInfo"`
@@ -62,16 +77,26 @@ type DestinyPostGameCarnageReportPlayer struct {
 }
 
 type DestinyPostGameCarnageReportExtendedData struct {
-	Values  DestinyHistoricalStatsMap      `json:"values"`
-	Weapons []DestinyHistoricalWeaponStats `json:"weapons"`
+	Values  map[string]DestinyHistoricalStatsValue `json:"values"`
+	Weapons []DestinyHistoricalWeaponStats         `json:"weapons"`
 }
+
+// type DestinyPostGameCarnageReportExtendedDataValues struct {
+// 	PrecisionKills     *DestinyHistoricalStatsValue `json:"precisionKills"`
+// 	WeaponKillsSuper   *DestinyHistoricalStatsValue `json:"weaponKillsSuper"`
+// 	WeaponKillsGrenade *DestinyHistoricalStatsValue `json:"weaponKillsGrenade"`
+// 	WeaponKillsMelee   *DestinyHistoricalStatsValue `json:"weaponKillsMelee"`
+// }
 
 type DestinyHistoricalWeaponStats struct {
-	ReferenceId uint32                    `json:"referenceId"`
-	Values      DestinyHistoricalStatsMap `json:"values"`
+	ReferenceId uint32                                 `json:"referenceId"`
+	Values      map[string]DestinyHistoricalStatsValue `json:"values"`
 }
 
-type DestinyHistoricalStatsMap map[string]DestinyHistoricalStatsValue
+// type DestinyHistoricalWeaponStatsValues struct {
+// 	UniqueWeaponKills          *DestinyHistoricalStatsValue `json:"uniqueWeaponKills"`
+// 	UniqueWeaponPrecisionKills *DestinyHistoricalStatsValue `json:"uniqueWeaponPrecisionKills"`
+// }
 
 type DestinyHistoricalStatsValue struct {
 	Basic DestinyHistoricalStatsValuePair `json:"basic"`

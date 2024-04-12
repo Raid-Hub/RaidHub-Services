@@ -1,4 +1,5 @@
 ALTER TABLE "activity" ADD COLUMN "score" INT NOT NULL DEFAULT 0;
+ALTER TABLE "player_activity" ADD COLUMN "score" INT NOT NULL DEFAULT 0;
 
 ALTER TABLE "activity" RENAME COLUMN "raid_hash" TO "hash";
 ALTER TABLE "activity" DROP CONSTRAINT "activity_raid_hash_fkey";
@@ -34,5 +35,3 @@ INSERT INTO "activity_hash" ("hash", "activity_id", "version_id") VALUES
     (4169648182, 104, 128);
 
 ALTER TABLE "activity" ADD CONSTRAINT "activity_hash_fk" FOREIGN KEY ("hash") REFERENCES "activity_hash"("hash");
-
-ALTER TABLE "player_activity" RENAME TO "activity_player";

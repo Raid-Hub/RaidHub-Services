@@ -93,6 +93,7 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, channe
 
 	pgcr, err := ProcessDestinyReport(&data.Response)
 	if err != nil {
+		log.Println(err)
 		return BadFormat, nil
 	}
 

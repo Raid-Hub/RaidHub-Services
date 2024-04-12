@@ -6,6 +6,7 @@ import (
 	"raidhub/shared/async/player_crawl"
 	"raidhub/shared/bungie"
 	"raidhub/shared/postgres"
+	"sync"
 	"time"
 
 	"github.com/lib/pq"
@@ -13,25 +14,30 @@ import (
 )
 
 // Returns lag, is_new, err
-func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport, postgresDb *sql.DB, channel *amqp.Channel) (*time.Duration, bool, error) {
+func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport, db *sql.DB, channel *amqp.Channel) (*time.Duration, bool, error) {
 	// Identify the raid which this PGCR belongs to
-	var raidId int
-	err := postgresDb.QueryRow(`SELECT activity_id FROM activity_hash WHERE hash = $1`, pgcr.RaidHash).Scan(&raidId)
+	var activityId int
+	var isRaid bool
+	err := db.QueryRow(`SELECT activity_id, is_raid 
+			FROM activity_hash 
+			JOIN activity_definition ON activity_hash.activity_id = activity_definition.id 
+			WHERE hash = $1`,
+		pgcr.Hash).Scan(&activityId, &isRaid)
 	if err != nil {
-		log.Printf("Error finding activity_id for %d", pgcr.RaidHash)
+		log.Printf("Error finding activity_id for %d", pgcr.Hash)
 		return nil, false, err
 	}
 
 	lag := time.Since(pgcr.DateCompleted)
 
 	// Store the raw JSON
-	err = StoreJSON(raw, postgresDb)
+	err = StoreJSON(raw, db)
 	if err != nil {
 		log.Println("Failed to store raw JSON")
 		return nil, false, err
 	}
 
-	tx, err := postgresDb.Begin()
+	tx, err := db.Begin()
 	if err != nil {
 		log.Println("Failed to initiate transaction")
 		return nil, false, err
@@ -50,10 +56,11 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 		"date_started",
 		"date_completed",
 		"platform_type",
-		"duration"
-	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, pgcr.InstanceId, pgcr.RaidHash,
+		"duration",
+		"score"
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, pgcr.InstanceId, pgcr.Hash,
 		pgcr.Flawless, pgcr.Completed, pgcr.Fresh, pgcr.PlayerCount,
-		pgcr.DateStarted, pgcr.DateCompleted, pgcr.MembershipType, pgcr.DurationSeconds)
+		pgcr.DateStarted, pgcr.DateCompleted, pgcr.MembershipType, pgcr.DurationSeconds, pgcr.Score)
 
 	if err != nil {
 		pqErr, ok := err.(*pq.Error)
@@ -77,24 +84,17 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 			FROM player_stats ps
 			LEFT JOIN activity a ON ps.fastest_instance_id = a.instance_id
 			WHERE ps.membership_id = $1 AND ps.activity_id = $2`,
-			playerActivity.Player.MembershipId, raidId).
+			playerActivity.Player.MembershipId, activityId).
 			Scan(&playerRaidClearCount, &duration)
 		fastestClearSoFar[playerActivity.Player.MembershipId] = duration
 
 		if err != nil {
-			log.Printf("Error querying clears in DB for instance_id, membership_id, activity_id: %d, %d, %d", pgcr.InstanceId, playerActivity.Player.MembershipId, raidId)
+			log.Printf("Error querying clears in DB for instance_id, membership_id, activity_id: %d, %d, %d", pgcr.InstanceId, playerActivity.Player.MembershipId, activityId)
 			return nil, false, err
 		}
 
-		if playerActivity.DidFinish {
+		if playerActivity.Finished {
 			completedDictionary[playerActivity.Player.MembershipId] = playerRaidClearCount > 0
-		}
-
-		if playerActivity.Player.MembershipType == nil || *playerActivity.Player.MembershipType == 0 {
-			err = player_crawl.SendPlayerCrawlMessage(channel, playerActivity.Player.MembershipId)
-			if err != nil {
-				log.Fatalf("Failed to send player crawl request: %s", err)
-			}
 		}
 
 		if _, err := postgres.UpsertPlayer(tx, &playerActivity.Player); err != nil {
@@ -107,17 +107,12 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 			INSERT INTO "activity_player" (
 				"instance_id",
 				"membership_id",
-				"finished_raid",
-				"kills",
-				"assists",
-				"deaths",
-				"time_played_seconds",
-				"class_hash"
+				"completed",
+				"time_played_seconds"
 			) 
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8);`,
+			VALUES ($1, $2, $3, $4);`,
 			pgcr.InstanceId, playerActivity.Player.MembershipId,
-			playerActivity.DidFinish, playerActivity.Kills, playerActivity.Assists, playerActivity.Deaths,
-			playerActivity.TimePlayedSeconds, playerActivity.ClassHash)
+			playerActivity.Finished, playerActivity.TimePlayedSeconds)
 		if err != nil {
 			log.Printf("Error inserting activity_player into DB for instanceId, membershipId %d, %d: %s", pgcr.InstanceId,
 				playerActivity.Player.MembershipId, err)
@@ -127,13 +122,81 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 		// update the player_stats table
 		_, err = tx.Exec(`INSERT INTO player_stats ("membership_id", "activity_id")
 			VALUES ($1, $2)
-			ON CONFLICT (membership_id, activity_id)
-			DO NOTHING`, playerActivity.Player.MembershipId, raidId)
+			ON CONFLICT (membership_id, activity_id) DO NOTHING`,
+			playerActivity.Player.MembershipId, activityId)
 
 		if err != nil {
-			log.Printf("Error inserting player_stats into DB for membershipId, activity_id: %d, %d", playerActivity.Player.MembershipId, raidId)
+			log.Printf("Error inserting player_stats into DB for membershipId, activity_id: %d, %d", playerActivity.Player.MembershipId, activityId)
 			return nil, false, err
 		}
+
+		// Send a crawl request if needed
+		if playerActivity.Player.MembershipType == nil || *playerActivity.Player.MembershipType == 0 {
+			err = player_crawl.SendPlayerCrawlMessage(channel, playerActivity.Player.MembershipId)
+			if err != nil {
+				log.Fatalf("Failed to send player crawl request: %s", err)
+			}
+		}
+		for _, character := range playerActivity.Characters {
+			_, err = tx.Exec(`
+				INSERT INTO "activity_character" (
+					"instance_id",
+					"membership_id",
+					"character_id",
+					"class_hash",
+					"completed",
+					"score",
+					"kills",
+					"assists",
+					"deaths",
+					"precision_kills",
+					"super_kills",
+					"grenade_kills",
+					"melee_kills",
+					"time_played_seconds",
+					"start_seconds"
+				) 
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15);`,
+				pgcr.InstanceId, playerActivity.Player.MembershipId,
+				character.CharacterId, character.ClassHash, character.Completed, character.Score, character.Kills,
+				character.Assists, character.Deaths, character.PrecisionKills, character.SuperKills,
+				character.GrenadeKills, character.MeleeKills, character.TimePlayedSeconds, character.StartSeconds)
+			if err != nil {
+				log.Printf("Error inserting activity_character into DB for instanceId, membershipId, characterId %d, %d, %d: %s",
+					pgcr.InstanceId, playerActivity.Player.MembershipId, character.CharacterId, err)
+				return nil, false, err
+			}
+
+			var wg sync.WaitGroup
+			errs := make(chan error, len(character.Weapons))
+			for _, w := range character.Weapons {
+				wg.Add(1)
+				go func(weapon ProcessedCharacterActivityWeapon) {
+					defer wg.Done()
+					_, err = tx.Exec(`
+						INSERT INTO "activity_character_weapon" (
+							"instance_id",
+							"character_id",
+							"weapon_hash",
+							"kills",
+							"precision_kills"
+						) 
+						VALUES ($1, $2, $3, $4, $5);`,
+						pgcr.InstanceId, character.CharacterId, weapon.WeaponHash, weapon.Kills, weapon.PrecisionKills)
+					if err != nil {
+						errs <- err
+						log.Printf("Error inserting activity_character_weapon into DB for instanceId, character_id, weapon_hash %d, %d, %d: %s",
+							pgcr.InstanceId, character.CharacterId, weapon.WeaponHash, err)
+					}
+				}(w)
+			}
+			wg.Wait()
+			close(errs)
+			for err := range errs {
+				return nil, false, err
+			}
+		}
+
 	}
 
 	// determine if a sherpa took place
@@ -215,7 +278,7 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 			WHERE
 				membership_id = $1 AND
 				activity_id = $2;
-			`, membershipId, raidId, sherpaCount, pgcr.Fresh, pgcr.PlayerCount, pgcr.DurationSeconds, fastestClearSoFar[membershipId], pgcr.InstanceId)
+			`, membershipId, activityId, sherpaCount, pgcr.Fresh, pgcr.PlayerCount, pgcr.DurationSeconds, fastestClearSoFar[membershipId], pgcr.InstanceId)
 
 		if err != nil {
 			log.Printf("Error updating player_stats for membershipId %d", membershipId)
@@ -249,7 +312,7 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 					FROM player_stats ps
 					JOIN activity_definition r ON ps.activity_id = r.id
 					LEFT JOIN activity a ON ps.fastest_instance_id = a.instance_id
-					WHERE a.duration IS NOT NULL AND is_sunset = false 
+					WHERE a.duration IS NOT NULL AND is_raid = true AND is_sunset = false 
 						AND ps.membership_id = $1
 					GROUP BY ps.membership_id
 					HAVING COUNT(a.instance_id) = (SELECT expected FROM c)
