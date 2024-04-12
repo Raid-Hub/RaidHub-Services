@@ -1,5 +1,4 @@
 ALTER TABLE "activity" ADD COLUMN "score" INT NOT NULL DEFAULT 0;
-ALTER TABLE "player_activity" ADD COLUMN "score" INT NOT NULL DEFAULT 0;
 
 ALTER TABLE "activity" RENAME COLUMN "raid_hash" TO "hash";
 ALTER TABLE "activity" DROP CONSTRAINT "activity_raid_hash_fkey";

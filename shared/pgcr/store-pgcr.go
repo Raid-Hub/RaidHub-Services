@@ -176,13 +176,15 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 					_, err = tx.Exec(`
 						INSERT INTO "activity_character_weapon" (
 							"instance_id",
+							"membership_id",
 							"character_id",
 							"weapon_hash",
 							"kills",
 							"precision_kills"
 						) 
-						VALUES ($1, $2, $3, $4, $5);`,
-						pgcr.InstanceId, character.CharacterId, weapon.WeaponHash, weapon.Kills, weapon.PrecisionKills)
+						VALUES ($1, $2, $3, $4, $5, $6);`,
+						pgcr.InstanceId, playerActivity.Player.MembershipId,
+						character.CharacterId, weapon.WeaponHash, weapon.Kills, weapon.PrecisionKills)
 					if err != nil {
 						errs <- err
 						log.Printf("Error inserting activity_character_weapon into DB for instanceId, character_id, weapon_hash %d, %d, %d: %s",
