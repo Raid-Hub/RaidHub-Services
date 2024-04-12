@@ -42,7 +42,7 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 	// Nothing should happen if this fails
 	_, err = tx.Exec(`INSERT INTO "activity" (
 		"instance_id",
-		"raid_hash",
+		"hash",
 		"flawless",
 		"completed",
 		"fresh",

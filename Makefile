@@ -37,6 +37,6 @@ postgres:
 prometheus:
 	$(DOCKER_COMPOSE) up -d prometheus
 
-rabbitmq:
+rabbit:
 	$(DOCKER_COMPOSE) up -d rabbitmq
 	

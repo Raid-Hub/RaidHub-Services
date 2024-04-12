@@ -13,7 +13,7 @@ services:
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-password}"
     volumes:
       - ./raidhub-postgres:/var/lib/postgresql/data
-      - ../schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready raidhub -U ${POSTGRES_USER:-username}"]
       interval: 5s
