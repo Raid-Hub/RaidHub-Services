@@ -6,6 +6,7 @@ CREATE TABLE "activity_character" (
     "membership_id" BIGINT NOT NULL,
     "character_id" BIGINT NOT NULL,
     "class_hash" BIGINT,
+    "emblem_hash" BIGINT,
     "completed" BOOLEAN NOT NULL,
     "score" INTEGER NOT NULL DEFAULT 0,
     "kills" INTEGER NOT NULL DEFAULT 0,

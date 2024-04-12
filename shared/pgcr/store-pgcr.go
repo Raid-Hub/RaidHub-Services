@@ -144,6 +144,7 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 					"membership_id",
 					"character_id",
 					"class_hash",
+					"emblem_hash",
 					"completed",
 					"score",
 					"kills",
@@ -156,10 +157,10 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 					"time_played_seconds",
 					"start_seconds"
 				) 
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15);`,
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16);`,
 				pgcr.InstanceId, playerActivity.Player.MembershipId,
-				character.CharacterId, character.ClassHash, character.Completed, character.Score, character.Kills,
-				character.Assists, character.Deaths, character.PrecisionKills, character.SuperKills,
+				character.CharacterId, character.ClassHash, character.EmblemHash, character.Completed, character.Score,
+				character.Kills, character.Assists, character.Deaths, character.PrecisionKills, character.SuperKills,
 				character.GrenadeKills, character.MeleeKills, character.TimePlayedSeconds, character.StartSeconds)
 			if err != nil {
 				log.Printf("Error inserting activity_character into DB for instanceId, membershipId, characterId %d, %d, %d: %s",

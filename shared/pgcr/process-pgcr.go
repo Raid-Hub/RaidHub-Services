@@ -35,6 +35,7 @@ type ProcessedPlayerActivity struct {
 type ProcessedPlayerActivityCharacter struct {
 	CharacterId       int64
 	ClassHash         *uint32
+	EmblemHash        *uint32
 	Completed         bool
 	Score             int
 	Kills             int
@@ -132,6 +133,11 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 				character.ClassHash = new(uint32)
 				*character.ClassHash = entry.Player.ClassHash
 			}
+			if entry.Player.EmblemHash != 0 {
+				character.EmblemHash = new(uint32)
+				*character.EmblemHash = entry.Player.EmblemHash
+			}
+
 			character.Score = getStat(entry.Values, "score")
 			character.Score = getStat(entry.Values, "completionReason")
 			character.Kills = getStat(entry.Values, "kills")
