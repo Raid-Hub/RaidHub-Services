@@ -9,7 +9,7 @@ import (
 
 func main() {
 	go player_crawl.Register(3)
-	go bonus_pgcr.Register(10)
+	go bonus_pgcr.Register(1)
 	go activity_history.Register(4)
 
 	monitoring.RegisterPrometheus(8083)
