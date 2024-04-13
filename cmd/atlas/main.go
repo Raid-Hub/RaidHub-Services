@@ -16,13 +16,13 @@ import (
 )
 
 var (
-	numWorkers   = flag.Int("workers", 50, "number of workers to spawn at the start")
-	buffer       = flag.Int64("buffer", 10_000, "number of ids to start behind last added")
-	workers      = 0
-	periodLength = 50_000
+	numWorkers       = flag.Int("workers", 50, "number of workers to spawn at the start")
+	buffer           = flag.Int64("buffer", 10_000, "number of ids to start behind last added")
+	targetInstanceId = flag.Int64("target", -1, "specific instance id to start at (optional)")
+	workers          = 0
+	periodLength     = 50_000
 )
 
-// bin/atlas <numWorkersStart> <offset>
 func main() {
 	flag.Parse()
 	if err := godotenv.Load(); err != nil {
@@ -40,9 +40,14 @@ func main() {
 	}
 	defer db.Close()
 
-	instanceId, err := postgres.GetLatestInstanceId(db, *buffer)
-	if err != nil {
-		log.Fatalf("Error getting latest instance id: %s", err)
+	var instanceId int64
+	if *targetInstanceId == -1 {
+		instanceId, err = postgres.GetLatestInstanceId(db, *buffer)
+		if err != nil {
+			log.Fatalf("Error getting latest instance id: %s", err)
+		}
+	} else {
+		instanceId = *targetInstanceId
 	}
 
 	monitoring.RegisterPrometheus(8080)

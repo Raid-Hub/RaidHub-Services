@@ -12,7 +12,7 @@ import (
 
 type ProcessedActivity struct {
 	InstanceId       int64
-	RaidHash         uint32
+	Hash             uint32
 	Completed        bool
 	Flawless         *bool
 	Fresh            *bool
@@ -21,17 +21,39 @@ type ProcessedActivity struct {
 	DateCompleted    time.Time
 	DurationSeconds  int
 	MembershipType   int
+	Score            int
 	PlayerActivities []ProcessedPlayerActivity
 }
 
 type ProcessedPlayerActivity struct {
-	DidFinish         bool
+	Finished          bool
+	TimePlayedSeconds int
+	Player            postgres.Player
+	Characters        []ProcessedPlayerActivityCharacter
+}
+
+type ProcessedPlayerActivityCharacter struct {
+	CharacterId       int64
+	ClassHash         *uint32
+	EmblemHash        *uint32
+	Completed         bool
+	Score             int
 	Kills             int
 	Deaths            int
 	Assists           int
+	PrecisionKills    int
+	SuperKills        int
+	GrenadeKills      int
+	MeleeKills        int
+	StartSeconds      int
 	TimePlayedSeconds int
-	ClassHash         *uint32
-	Player            postgres.Player
+	Weapons           []ProcessedCharacterActivityWeapon
+}
+
+type ProcessedCharacterActivityWeapon struct {
+	WeaponHash     uint32
+	Kills          int
+	PrecisionKills int
 }
 
 func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*ProcessedActivity, error) {
@@ -40,7 +62,7 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 		return nil, err
 	}
 
-	expectedEntryCount := int(report.Entries[0].Values["playerCount"].Basic.Value)
+	expectedEntryCount := getStat(report.Entries[0].Values, "playerCount")
 	actualEntryCount := len(report.Entries)
 	if expectedEntryCount >= 0 && actualEntryCount != expectedEntryCount {
 		return nil, fmt.Errorf("malformed pgcr: invalid entry length: %d != %d", actualEntryCount, expectedEntryCount)
@@ -48,13 +70,36 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 
 	noOnePlayed := true
 	for _, e := range report.Entries {
-		if int(e.Values["activityDurationSeconds"].Basic.Value) != 0 {
+		if getStat(e.Values, "activityDurationSeconds") != 0 {
 			noOnePlayed = false
 			break
 		}
 	}
 	if noOnePlayed {
 		return nil, errors.New("malformed pgcr: no one had any duration_seconds")
+	}
+
+	instanceId, err := strconv.ParseInt(report.ActivityDetails.InstanceId, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	completionReason := getStat(report.Entries[0].Values, "completionReason")
+
+	fresh, err := isFresh(report)
+	if err != nil {
+		return nil, err
+	}
+
+	result := ProcessedActivity{
+		InstanceId:      instanceId,
+		Hash:            report.ActivityDetails.DirectorActivityHash,
+		Fresh:           fresh,
+		DateStarted:     startDate,
+		DateCompleted:   CalculateDateCompleted(startDate, report.Entries[0]),
+		DurationSeconds: CalculateDurationSeconds(startDate, report.Entries[0]),
+		MembershipType:  report.ActivityDetails.MembershipType,
+		Score:           getStat(report.Entries[0].Values, "teamScore"),
 	}
 
 	players := make(map[string][]bungie.DestinyPostGameCarnageReportEntry)
@@ -70,63 +115,64 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 	var processedPlayerActivities []ProcessedPlayerActivity
 	for _, entries := range players {
 		processedPlayerActivity := ProcessedPlayerActivity{
-			Kills:             0,
-			Deaths:            0,
-			Assists:           0,
-			TimePlayedSeconds: 0,
-		}
-		activityDurationSecondsValue, activityDurationSecondsExists := entries[0].Values["activityDurationSeconds"]
-		activityDuration := 0
-		if activityDurationSecondsExists {
-			activityDuration = int(activityDurationSecondsValue.Basic.Value)
-		}
-		maxActivityDuration := 0
-		if activityDuration == 32767 {
-			maxActivityDuration = -1
-		} else {
-			maxActivityDuration = activityDuration
+			Characters: []ProcessedPlayerActivityCharacter{},
+			Player:     postgres.Player{},
 		}
 
 		for _, entry := range entries {
-			completedValue, completedExists := entry.Values["completed"]
-			completionReasonValue, completionReasonExists := entry.Values["completionReason"]
-			killsValue, killsExists := entry.Values["kills"]
-			deathsValue, deathsExists := entry.Values["deaths"]
-			assistsValue, assistsExists := entry.Values["assists"]
-			timePlayedSecondsValue, timePlayedSecondsExists := entry.Values["timePlayedSeconds"]
-
-			if !processedPlayerActivity.DidFinish && completedExists && completionReasonExists && completedValue.Basic.Value == 1 && completionReasonValue.Basic.Value == 0 {
-				processedPlayerActivity.DidFinish = true
+			characterId, err := strconv.ParseInt(entry.CharacterId, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			character := ProcessedPlayerActivityCharacter{
+				CharacterId: characterId,
+				Completed:   getStat(entry.Values, "completed") == 1,
+				Weapons:     []ProcessedCharacterActivityWeapon{},
+			}
+			if entry.Player.ClassHash != 0 {
+				character.ClassHash = new(uint32)
+				*character.ClassHash = entry.Player.ClassHash
+			}
+			if entry.Player.EmblemHash != 0 {
+				character.EmblemHash = new(uint32)
+				*character.EmblemHash = entry.Player.EmblemHash
 			}
 
-			if killsExists {
-				processedPlayerActivity.Kills += int(killsValue.Basic.Value)
+			character.Score = getStat(entry.Values, "score")
+			character.Score = getStat(entry.Values, "completionReason")
+			character.Kills = getStat(entry.Values, "kills")
+			character.Deaths = getStat(entry.Values, "deaths")
+			character.Assists = getStat(entry.Values, "assists")
+			character.TimePlayedSeconds = getStat(entry.Values, "timePlayedSeconds")
+			character.StartSeconds = getStat(entry.Values, "startSeconds")
+			if entry.Extended != nil {
+				character.PrecisionKills = getStat(entry.Extended.Values, "precisionKills")
+				character.SuperKills = getStat(entry.Extended.Values, "weaponKillsSuper")
+				character.GrenadeKills = getStat(entry.Extended.Values, "weaponKillsGrenade")
+				character.MeleeKills = getStat(entry.Extended.Values, "weaponKillsMelee")
+
+				for _, weapon := range entry.Extended.Weapons {
+					processedWeapon := ProcessedCharacterActivityWeapon{
+						WeaponHash: weapon.ReferenceId,
+					}
+					processedWeapon.Kills = getStat(weapon.Values, "uniqueWeaponKills")
+					processedWeapon.PrecisionKills = getStat(weapon.Values, "uniqueWeaponPrecisionKills")
+					character.Weapons = append(character.Weapons, processedWeapon)
+				}
 			}
 
-			if deathsExists {
-				processedPlayerActivity.Deaths += int(deathsValue.Basic.Value)
-			}
+			processedPlayerActivity.Characters = append(processedPlayerActivity.Characters, character)
 
-			if assistsExists {
-				processedPlayerActivity.Assists += int(assistsValue.Basic.Value)
-			}
-
-			if timePlayedSecondsExists {
-				processedPlayerActivity.TimePlayedSeconds += int(timePlayedSecondsValue.Basic.Value)
-			}
-
+			processedPlayerActivity.Finished = processedPlayerActivity.Finished || (character.Completed && completionReason == 0)
 		}
 
-		if maxActivityDuration != -1 && processedPlayerActivity.TimePlayedSeconds > maxActivityDuration {
-			processedPlayerActivity.TimePlayedSeconds = maxActivityDuration
-		}
+		processedPlayerActivity.TimePlayedSeconds = calculatePlayerTimePlayedSeconds(entries)
 
 		destinyUserInfo := entries[0].Player.DestinyUserInfo
 		membershipId, err := strconv.ParseInt(destinyUserInfo.MembershipId, 10, 64)
 		if err != nil {
 			return nil, err
 		}
-		classHash := entries[0].Player.ClassHash
 
 		processedPlayerActivity.Player.LastSeen = startDate
 		processedPlayerActivity.Player.MembershipId = membershipId
@@ -145,82 +191,82 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 					*processedPlayerActivity.Player.BungieGlobalDisplayName = *destinyUserInfo.BungieGlobalDisplayName
 				}
 			}
-			if classHash != 0 {
-				processedPlayerActivity.ClassHash = new(uint32)
-				*processedPlayerActivity.ClassHash = classHash
-			}
 		}
 
 		processedPlayerActivities = append(processedPlayerActivities, processedPlayerActivity)
 	}
 
-	complete := false
+	result.PlayerActivities = processedPlayerActivities
+	result.PlayerCount = len(players)
+
+	result.Completed = false
 	for _, e := range processedPlayerActivities {
-		if e.DidFinish {
-			complete = true
+		if e.Finished {
+			result.Completed = true
 			break
 		}
 	}
 
 	deathless := true
 	for _, e := range processedPlayerActivities {
-		if e.Deaths > 0 {
-			deathless = false
+		for _, c := range e.Characters {
+			if c.Deaths > 0 {
+				deathless = false
+				break
+			}
+		}
+		if !deathless {
 			break
 		}
 	}
 
-	fresh, err := isFresh(report)
-	if err != nil {
-		return nil, err
-	}
-
-	var flawless *bool
-	if complete && deathless {
-		flawless = fresh
+	if result.Completed && deathless {
+		result.Flawless = fresh
 	} else {
-		flawless = new(bool) // false
-	}
-
-	instanceId, err := strconv.ParseInt(report.ActivityDetails.InstanceId, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-
-	result := ProcessedActivity{
-		InstanceId:       instanceId,
-		RaidHash:         report.ActivityDetails.DirectorActivityHash,
-		Completed:        complete,
-		Flawless:         flawless,
-		Fresh:            fresh,
-		PlayerCount:      len(players),
-		DateStarted:      startDate,
-		DateCompleted:    CalculateDateCompleted(startDate, report.Entries[0]),
-		DurationSeconds:  CalculateDurationSeconds(startDate, report.Entries[0]),
-		MembershipType:   report.ActivityDetails.MembershipType,
-		PlayerActivities: processedPlayerActivities,
+		result.Flawless = new(bool) // false
 	}
 
 	return &result, nil
 }
 
-func CalculateDurationSeconds(startDate time.Time, entry bungie.DestinyPostGameCarnageReportEntry) int {
-
-	durationValue, durationExists := entry.Values["activityDurationSeconds"]
-	if durationExists {
-		return int(durationValue.Basic.Value)
+func getStat(values map[string]bungie.DestinyHistoricalStatsValue, key string) int {
+	if stat, ok := values[key]; ok {
+		return int(stat.Basic.Value)
+	} else {
+		return 0
 	}
-	return 0
+}
+
+func calculatePlayerTimePlayedSeconds(characters []bungie.DestinyPostGameCarnageReportEntry) int {
+	timeline := make([]int, getStat(characters[0].Values, "activityDurationSeconds")+1)
+	for _, character := range characters {
+		startSecond := getStat(character.Values, "startSeconds")
+		timePlayedSeconds := getStat(character.Values, "timePlayedSeconds")
+		endSecond := startSecond + timePlayedSeconds
+
+		timeline[startSecond]++
+		timeline[endSecond]--
+	}
+
+	durationSeconds := 0
+	currentCharacters := 0
+	for _, val := range timeline {
+		currentCharacters += val
+		if currentCharacters > 0 {
+			durationSeconds++
+		}
+	}
+
+	return durationSeconds
+}
+
+func CalculateDurationSeconds(startDate time.Time, entry bungie.DestinyPostGameCarnageReportEntry) int {
+	return getStat(entry.Values, "activityDurationSeconds")
 }
 
 func CalculateDateCompleted(startDate time.Time, entry bungie.DestinyPostGameCarnageReportEntry) time.Time {
-
-	durationValue, durationExists := entry.Values["activityDurationSeconds"]
-	if durationExists {
-		duration := time.Duration(durationValue.Basic.Value) * time.Second
-		return startDate.Add(duration)
-	}
-	return startDate
+	seconds := getStat(entry.Values, "activityDurationSeconds")
+	return startDate.Add(time.Duration(seconds) * time.Second)
 }
 
 var (

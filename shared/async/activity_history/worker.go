@@ -48,6 +48,7 @@ func process_request(msg *amqp.Delivery) {
 		return
 	}
 
+	log.Println(request.MembershipType, request.MembershipId)
 	stats, err := bungie.GetHistoricalStats(request.MembershipType, request.MembershipId)
 	if err != nil {
 		log.Printf("Failed to get stats: %s", err)

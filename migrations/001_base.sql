@@ -7,31 +7,26 @@ CREATE TABLE "raid" (
 );
 
 CREATE TABLE "raid_version" (
-    "id" INTEGER NOT NULL,
+    "id" INTEGER NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
     "associated_raid_id" INTEGER,
 
-    CONSTRAINT "raid_version_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "raid_version_associated_raid_id_fkey" FOREIGN KEY ("associated_raid_id") REFERENCES "raid"("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
-ALTER TABLE "raid_version" ADD 
-
 CREATE TABLE "raid_definition" (
-    "hash" BIGINT NOT NULL,
+    "hash" BIGINT NOT NULL PRIMARY KEY,
     "raid_id" INTEGER NOT NULL,
     "version_id" INTEGER NOT NULL,
 
-    CONSTRAINT "raid_definition_pkey" PRIMARY KEY ("hash"),
     CONSTRAINT "raid_definition_raid_id_fkey" FOREIGN KEY ("raid_id") REFERENCES "raid"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "raid_definition_version_id_fkey" FOREIGN KEY ("version_id") REFERENCES "raid_version"("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
-
 CREATE INDEX "idx_raid_definition_raid_id" ON "raid_definition"("raid_id");
 CREATE INDEX "idx_raid_definition_version_id" ON "raid_definition"("version_id");
 
 CREATE TABLE "activity" (
-    "instance_id" BIGINT NOT NULL,
+    "instance_id" BIGINT NOT NULL PRIMARY KEY,
     "raid_hash" BIGINT NOT NULL,
     "flawless" BOOLEAN,
     "completed" BOOLEAN NOT NULL,
@@ -42,20 +37,19 @@ CREATE TABLE "activity" (
     "duration" INTEGER NOT NULL,
     "platform_type" INTEGER NOT NULL,
 
-    CONSTRAINT "activity_pkey" PRIMARY KEY ("instance_id"),
     CONSTRAINT "activity_raid_hash_fkey" FOREIGN KEY ("raid_hash") REFERENCES "raid_definition"("hash") ON DELETE NO ACTION ON UPDATE NO ACTION
 );
+
+
 -- Raid Completion Leaderboard
 CREATE INDEX "idx_raidhash_date_completed" ON "activity"("raid_hash", "date_completed");
--- Recent Activity
-CREATE INDEX "date_index" ON "activity"("date_completed" DESC);
 -- Tag Search Index
 CREATE INDEX "tag_index" ON "activity"("completed", "player_count", "fresh", "flawless");
 -- Speedrun Index
-CREATE INDEX "speedrun_index" ON "activity"("raid_hash", "completed", "fresh", "duration" ASC);
+CREATE INDEX "speedrun_index" ON "activity"("raid_hash", "completed", "fresh", "duration");
 
 CREATE TABLE "player" (
-    "membership_id" BIGINT NOT NULL,
+    "membership_id" BIGINT NOT NULL PRIMARY KEY,
     "membership_type" INTEGER,
     "icon_path" TEXT,
     "display_name" TEXT,
@@ -77,14 +71,11 @@ CREATE TABLE "player" (
     "last_crawled" TIMESTAMP(3),
     "_search_score" NUMERIC GENERATED ALWAYS AS (
         sqrt("clears" + 1) * power(2, GREATEST(0, EXTRACT(EPOCH FROM ("last_seen" - TIMESTAMP '2017-08-27'))) / 20000000)
-    ) STORED;
-
-    CONSTRAINT "player_pkey" PRIMARY KEY ("membership_id")
+    ) STORED
 );
 
--- Player Search Indices
-CREATE INDEX "primary_search_idx" ON "player" (lower("bungie_name") text_pattern_ops, "_search_score" DESC);
-CREATE INDEX "secondary_search_idx" ON "player" (lower("display_name") text_pattern_ops, "_search_score" DESC);
+CREATE INDEX "primary_search_idx" ON "player"(lower("bungie_name") text_pattern_ops, "_search_score" DESC);
+CREATE INDEX "secondary_search_idx" ON "player"(lower("display_name") text_pattern_ops, "_search_score" DESC);
 
 CREATE TABLE "player_activity" (
     "instance_id" BIGINT NOT NULL,
@@ -99,6 +90,7 @@ CREATE TABLE "player_activity" (
     "is_first_clear" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "player_activity_instance_id_membership_id_pkey" PRIMARY KEY ("instance_id","membership_id"),
+
     CONSTRAINT "player_activity_instance_id_fkey" FOREIGN KEY ("instance_id") REFERENCES "activity"("instance_id") ON DELETE RESTRICT ON UPDATE NO ACTION,
     CONSTRAINT "player_activity_membership_id_fkey" FOREIGN KEY ("membership_id") REFERENCES "player"("membership_id") ON DELETE RESTRICT ON UPDATE NO ACTION
 );
@@ -117,6 +109,7 @@ CREATE TABLE "player_stats" (
     "fastest_instance_id" BIGINT,
 
     CONSTRAINT "player_stats_pkey" PRIMARY KEY ("membership_id","raid_id"),
+
     CONSTRAINT "raid_id_fkey" FOREIGN KEY ("raid_id") REFERENCES "raid"("id") ON DELETE RESTRICT ON UPDATE NO ACTION,
     CONSTRAINT "player_membership_id_fkey" FOREIGN KEY ("membership_id") REFERENCES "player"("membership_id") ON DELETE RESTRICT ON UPDATE NO ACTION,
     CONSTRAINT "player_stats_fastest_instance_id_fkey" FOREIGN KEY ("fastest_instance_id") REFERENCES "activity"("instance_id") ON DELETE SET NULL ON UPDATE CASCADE
@@ -124,15 +117,16 @@ CREATE TABLE "player_stats" (
 
 CREATE TYPE "WorldFirstLeaderboardType" AS ENUM ('Normal', 'Challenge', 'Prestige', 'Master');
 CREATE TABLE "leaderboard" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "raid_id" INTEGER NOT NULL,
     "date" TIMESTAMP(3) NOT NULL,
     "is_world_first" BOOLEAN NOT NULL DEFAULT false,
     "type" "WorldFirstLeaderboardType" NOT NULL,
 
-    CONSTRAINT "leaderboard_pkey" PRIMARY KEY ("id")
+    -- CONSTRAINT "leaderboard_pkey" PRIMARY KEY ("id"),
+
+    CONSTRAINT "leaderboard_raid_id_fkey" FOREIGN KEY ("raid_id") REFERENCES "raid"("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
-ALTER TABLE "leaderboard" ADD CONSTRAINT "leaderboard_raid_id_fkey" FOREIGN KEY ("raid_id") REFERENCES "raid"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 CREATE UNIQUE INDEX "leaderboard_raid_hash_type_key" ON "leaderboard"("raid_id", "type");
 
 CREATE TABLE "activity_leaderboard_entry" (
@@ -141,21 +135,19 @@ CREATE TABLE "activity_leaderboard_entry" (
     "leaderboard_id" TEXT NOT NULL,
     "instance_id" BIGINT NOT NULL,
 
-    CONSTRAINT "activity_leaderboard_entry_pkey" PRIMARY KEY ("leaderboard_id", "instance_id")
-);
+    CONSTRAINT "activity_leaderboard_entry_pkey" PRIMARY KEY ("leaderboard_id", "instance_id"),
 
-ALTER TABLE "activity_leaderboard_entry" ADD CONSTRAINT "activity_leaderboard_entry_instance_id_fkey" FOREIGN KEY ("instance_id") REFERENCES "activity"("instance_id") ON DELETE NO ACTION ON UPDATE NO ACTION;
-ALTER TABLE "activity_leaderboard_entry" ADD CONSTRAINT "activity_leaderboard_entry_leaderboard_id_fkey" FOREIGN KEY ("leaderboard_id") REFERENCES "leaderboard"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-CREATE INDEX "activity_leaderboard_entry_instance_id_index" ON "activity_leaderboard_entry" USING HASH ("instance_id");
+    CONSTRAINT "activity_leaderboard_entry_instance_id_fkey" FOREIGN KEY ("instance_id") REFERENCES "activity"("instance_id") ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT "activity_leaderboard_entry_leaderboard_id_fkey" FOREIGN KEY ("leaderboard_id") REFERENCES "leaderboard"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE INDEX "activity_leaderboard_entry_instance_id_index" ON "activity_leaderboard_entry" ("instance_id");
 CREATE INDEX "activity_leaderboard_position" ON "activity_leaderboard_entry"("leaderboard_id", "position" ASC);
 
 -- Raw PGCR Data
 CREATE TABLE "pgcr" (
-    "instance_id" BIGINT NOT NULL,
+    "instance_id" BIGINT NOT NULL PRIMARY KEY,
     "data" BYTEA NOT NULL,
-    "date_crawled" TIMESTAMP DEFAULT NOW(),
-
-    CONSTRAINT "pgcr_pkey" PRIMARY KEY ("instance_id")
+    "date_crawled" TIMESTAMP DEFAULT NOW()
 );
 
 -- Insert Raid data
@@ -291,59 +283,6 @@ INSERT INTO "raid_definition" ("raid_id", "version_id", "hash") VALUES
     (13, 66, 156253568),
     -- CROTAS_END MASTER
     (13, 4, 1507509200);
-
-CREATE OR REPLACE FUNCTION SEASON(p_input_date timestamp with time zone)
-RETURNS integer AS $$
-DECLARE
-    v_season_number integer;
-    v_season_dates timestamp with time zone[] := ARRAY[
-        '2017-12-05T17:00:00Z',
-        '2018-05-08T18:00:00Z',
-        '2018-09-04T17:00:00Z',
-        '2018-11-27T17:00:00Z',
-        '2019-03-05T17:00:00Z',
-        '2019-06-04T17:00:00Z',
-        '2019-10-01T17:00:00Z',
-        '2019-12-10T17:00:00Z',
-        '2020-03-10T17:00:00Z',
-        '2020-06-09T17:00:00Z',
-        '2020-11-10T17:00:00Z',
-        '2021-02-09T17:00:00Z',
-        '2021-05-11T17:00:00Z',
-        '2021-08-24T17:00:00Z',
-        '2022-02-22T17:00:00Z',
-        '2022-05-24T17:00:00Z',
-        '2022-08-23T17:00:00Z',
-        '2022-12-06T17:00:00Z',
-        '2023-02-28T17:00:00Z',
-        '2023-05-23T17:00:00Z',
-        '2023-08-22T17:00:00Z',
-        '2023-11-28T17:00:00Z',
-        '2024-06-04T17:00:00Z',
-        -- add new seasons here
-        '2099-12-31T17:00:00Z'
-    ];
-    v_low integer := 1;
-    v_high integer := array_length(v_season_dates, 1);
-BEGIN
-    -- binary search
-    WHILE v_low <= v_high LOOP
-        DECLARE
-            v_mid integer := floor((v_low + v_high) / 2);
-        BEGIN
-            IF p_input_date >= v_season_dates[v_mid] THEN
-                v_low := v_mid + 1;
-            ELSE
-                v_high := v_mid - 1;
-            END IF;
-        END;
-    END LOOP;
-
-    v_season_number := v_high + 1;
-
-    RETURN v_season_number;
-END;
-$$ LANGUAGE plpgsql;
 
 -- Materialized Views
 CREATE MATERIALIZED VIEW global_leaderboard AS
