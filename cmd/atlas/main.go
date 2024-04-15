@@ -76,12 +76,12 @@ func run(latestId int64, db *sql.DB) {
 	defer rabbitChannel.Close()
 
 	consumerConfig := ConsumerConfig{
-		LatestId:         latestId,
-		GapMode:          false,
-		FailuresChannel:  make(chan int64),
-		SuccessChannel:   make(chan int64),
-		MalformedChannel: make(chan int64),
-		RabbitChannel:    rabbitChannel,
+		LatestId:        latestId,
+		GapMode:         false,
+		FailuresChannel: make(chan int64),
+		SuccessChannel:  make(chan int64),
+		OffloadChannel:  make(chan int64),
+		RabbitChannel:   rabbitChannel,
 	}
 
 	sendStartUpAlert()
@@ -92,8 +92,8 @@ func run(latestId int64, db *sql.DB) {
 	// Start a goroutine to consume found PGCRs from the gap mode channel
 	go consumeSuccesses(&consumerConfig)
 
-	// Start a goroutine to consume malformed PGCRs
-	go malformedWorker(consumerConfig.MalformedChannel, consumerConfig.RabbitChannel, db)
+	// Start a goroutine to offload malformed or slowly resolving PGCRs
+	go offloadWorker(consumerConfig.OffloadChannel, consumerConfig.FailuresChannel, consumerConfig.RabbitChannel, db)
 
 	for {
 		if !consumerConfig.GapMode {
@@ -118,7 +118,7 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 
 	for i := 0; i < countWorkers; i++ {
 		wg.Add(1)
-		go Worker(&wg, ids, resultsChannel, consumerConfig.FailuresChannel, consumerConfig.MalformedChannel, consumerConfig.RabbitChannel, db)
+		go Worker(&wg, ids, resultsChannel, consumerConfig.FailuresChannel, consumerConfig.OffloadChannel, consumerConfig.RabbitChannel, db)
 	}
 
 	// Pass IDs to workers
@@ -160,7 +160,7 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 	newWorkers := 0
 	if fractionNotFound == 0 {
 		// how much we expect to get catch up
-		periodLength = countWorkers * 4 * (int(math.Ceil(medianLag)) - 30) / 3
+		periodLength = countWorkers * (int(math.Ceil(medianLag)) - 30)
 		if periodLength < 10_000 {
 			periodLength = 10_000
 		}
@@ -174,7 +174,7 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 		}
 		// Adjust number of workers for the next period
 		newWorkers = int(math.Round(float64(countWorkers) - decreaseFraction*float64(countWorkers)))
-		periodLength = 500 * newWorkers
+		periodLength = 1000 * newWorkers
 	}
 
 	if newWorkers > maxWorkers {

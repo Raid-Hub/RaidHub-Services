@@ -16,7 +16,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failuresChannel chan int64, malformedChannel chan int64, rabbitChannel *amqp.Channel, db *sql.DB) {
+func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failuresChannel chan int64, offloadChannel chan int64, rabbitChannel *amqp.Channel, db *sql.DB) {
 	defer wg.Done()
 
 	securityKey := os.Getenv("BUNGIE_API_KEY")
@@ -40,11 +40,11 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 		var lag *time.Duration
 		var reqTime time.Duration
 		for {
-			cb = cb % circularBufferSize
 			reqStartTime := time.Now()
 			result, lag = pgcr.FetchAndStorePGCR(client, instanceID, db, rabbitChannel, proxy, securityKey)
 
 			if lag != nil {
+				cb = cb % circularBufferSize
 				behindHead[cb] = lag.Seconds()
 				cb++
 			}
@@ -65,27 +65,27 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 			} else if result == pgcr.NotFound {
 				notFoundCount++
 			} else if result == pgcr.SystemDisabled {
-				time.Sleep(30 * time.Second)
+				time.Sleep(60 * time.Second)
+				continue
 			} else if result == pgcr.InsufficientPrivileges {
 				failuresChannel <- instanceID
+				logMissedInstance(instanceID, startTime, false)
 				logInsufficentPrivileges(instanceID, startTime)
 				break
 			} else if result == pgcr.BadFormat {
 				pgcr.WriteMissedLog(instanceID)
-				malformedChannel <- instanceID
+				offloadChannel <- instanceID
 				break
 			}
 
 			// If we have not found the instance id after some time
-			if notFoundCount >= numMisses || errCount > 5 {
-				log.Printf("Could not find instance id %d a total of %d times, logging it to the file", instanceID, notFoundCount)
-				failuresChannel <- instanceID
-				logMissedInstance(instanceID, startTime, false)
+			if notFoundCount > 4 || errCount > 3 {
+				pgcr.WriteMissedLog(instanceID)
+				offloadChannel <- instanceID
 				break
-			} else if notFoundCount == numMissesForWarning {
-				logMissedInstanceWarning(instanceID, startTime)
 			}
-			timeout := time.Duration((retryDelayTime - randomVariation + rand.Intn((2*randomVariation)*(i+1)))) * time.Millisecond
+
+			timeout := time.Duration((retryDelayTime - randomVariation + rand.Intn(retryDelayTime*(i+1)))) * time.Millisecond
 			time.Sleep(timeout)
 			i++
 		}

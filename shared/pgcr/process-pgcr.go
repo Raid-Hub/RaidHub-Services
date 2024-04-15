@@ -139,7 +139,6 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 			}
 
 			character.Score = getStat(entry.Values, "score")
-			character.Score = getStat(entry.Values, "completionReason")
 			character.Kills = getStat(entry.Values, "kills")
 			character.Deaths = getStat(entry.Values, "deaths")
 			character.Assists = getStat(entry.Values, "assists")
@@ -238,14 +237,20 @@ func getStat(values map[string]bungie.DestinyHistoricalStatsValue, key string) i
 }
 
 func calculatePlayerTimePlayedSeconds(characters []bungie.DestinyPostGameCarnageReportEntry) int {
-	timeline := make([]int, getStat(characters[0].Values, "activityDurationSeconds")+1)
+	activityDurationSeconds := getStat(characters[0].Values, "activityDurationSeconds")
+	timeline := make([]int, activityDurationSeconds+1)
 	for _, character := range characters {
 		startSecond := getStat(character.Values, "startSeconds")
 		timePlayedSeconds := getStat(character.Values, "timePlayedSeconds")
 		endSecond := startSecond + timePlayedSeconds
 
-		timeline[startSecond]++
-		timeline[endSecond]--
+		if startSecond <= activityDurationSeconds {
+			timeline[startSecond]++
+		}
+
+		if endSecond <= activityDurationSeconds {
+			timeline[endSecond]--
+		}
 	}
 
 	durationSeconds := 0
