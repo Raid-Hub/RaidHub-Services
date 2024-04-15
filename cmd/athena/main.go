@@ -132,7 +132,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	rows, err := definitions.Query("SELECT json_extract(json, '$.hash'), json_extract(json, '$.displayProperties.name') FROM DestinyInventoryItemDefinition WHERE json_extract(json, '$.itemType') = 3")
+	rows, err := definitions.Query("SELECT json_extract(json, '$.hash'), json_extract(json, '$.displayProperties.name'), json_extract(json, '$.displayProperties.icon') FROM DestinyInventoryItemDefinition WHERE json_extract(json, '$.itemType') = 3")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func main() {
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare("INSERT INTO weapon_definition (hash, name) VALUES ($1::bigint, $2)")
+	stmt, err := tx.Prepare("INSERT INTO weapon_definition (hash, name, icon_path) VALUES ($1::bigint, $2, $3)")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -161,11 +161,12 @@ func main() {
 	for rows.Next() {
 		var hash uint32
 		var name string
-		if err := rows.Scan(&hash, &name); err != nil {
+		var icon string
+		if err := rows.Scan(&hash, &name, &icon); err != nil {
 			log.Fatal(err)
 		}
 
-		_, err := stmt.Exec(hash, name)
+		_, err := stmt.Exec(hash, name, icon)
 		if err != nil {
 			log.Fatal(err)
 		}

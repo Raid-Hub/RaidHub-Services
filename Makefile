@@ -1,42 +1,36 @@
 default: bin
 
-# Go Binaries
-GO_BUILD = go build
-BINARIES = ./bin
-COMMANDS = ./cmd
-
-.PHONY: bin atlas hades hermes zeus
-bin:
-	$(GO_BUILD) -o $(BINARIES)/ $(COMMANDS)/...
-
-atlas:
-	$(GO_BUILD) -o $(BINARIES)/atlas $(COMMANDS)/atlas
-
-hades:
-	$(GO_BUILD) -o $(BINARIES)/hades $(COMMANDS)/hades
-
-hermes:
-	$(GO_BUILD) -o $(BINARIES)/hermes $(COMMANDS)/hermes
-
-zeus:
-	$(GO_BUILD) -o $(BINARIES)/zeus $(COMMANDS)/zeus
-
-# Docker
+# Docker Services
 DOCKER_COMPOSE = docker-compose -f docker/docker-compose.yml --env-file ./.env
 
-.PHONY: up down postgres prometheus
-up:
-	$(DOCKER_COMPOSE) up -d 
+up, services:
+	$(DOCKER_COMPOSE) up -d postgres rabbitmq
 
 down:
 	$(DOCKER_COMPOSE) down
 
+# Single service
 postgres:
 	$(DOCKER_COMPOSE) up -d postgres
 
+rabbit:
+	$(DOCKER_COMPOSE) up -d rabbitmq
+
+## Optional services
 prometheus:
 	$(DOCKER_COMPOSE) up -d prometheus
 
-rabbit:
-	$(DOCKER_COMPOSE) up -d rabbitmq
+
+# Go Binaries
+GO_BUILD = go build
+BINARIES = -o ./bin/
+COMMANDS = ./cmd/
+
+.PHONY: bin
+bin:
+	$(GO_BUILD) $(BINARIES) $(COMMANDS)...
+
+# Build a specific cmd with make <name>
+.DEFAULT:
+	$(GO_BUILD) $(BINARIES)$@ $(COMMANDS)$@
 	
