@@ -37,7 +37,6 @@ CREATE TABLE "activity_character_weapon" (
 
     CONSTRAINT "activity_character_weapon_fkey" FOREIGN KEY ("instance_id","membership_id","character_id") REFERENCES "activity_character"("instance_id","membership_id","character_id") ON DELETE RESTRICT ON UPDATE NO ACTION
 );
-CREATE INDEX "activity_character_weapon_idx_weapon_hash" ON "activity_character_weapon"("weapon_hash");
 
 ALTER TABLE "activity_player" DROP COLUMN "class_hash", DROP COLUMN "kills", DROP COLUMN "assists", DROP COLUMN "deaths";
 DROP INDEX IF EXISTS "idx_instance_id";

@@ -164,7 +164,6 @@ func logInsufficentPrivileges(instanceId int64, startTime time.Time) {
 	}
 	discord.SendWebhook(getAtlasWebhookURL(), &webhook)
 	log.Printf("Warning: InsufficientPrivileges response for instanceId %d", instanceId)
-	logMissedInstance(instanceId, startTime, false)
 }
 
 func enterGapModeAlert(variation int64, startId int64, density float64) {
