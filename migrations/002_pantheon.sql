@@ -14,23 +14,23 @@ ALTER TABLE "raid_version" RENAME TO "version_definition";
 ALTER TABLE "version_definition" RENAME COLUMN "associated_raid_id" TO "associated_activity_id";
 
 INSERT INTO "activity_definition" ("id", "name", "is_raid") VALUES
-    (101, 'Atraks Sovereign', false),
-    (102, 'Oryx Exalted', false),
-    (103, 'Rhulk Indomitable', false),
-    (104, 'Nezarec Sublime', false);
+    (101, 'The Pantheon', false);
 
 -- Insert Version data
 INSERT INTO "version_definition" ("id", "name", "associated_activity_id") VALUES
-    (128, 'The Pantheon', NULL);
+    (128, 'Atraks Sovereign', 101),
+    (129, 'Oryx Exalted', 101),
+    (130, 'Rhulk Indomitable', 101),
+    (131, 'Nezarec Sublime', 101);
 
 INSERT INTO "activity_hash" ("hash", "activity_id", "version_id") VALUES 
     -- Atraks Sovereign
     (4169648179, 101, 128),
     -- Oryx Exalted
-    (4169648176, 102, 128),
+    (4169648176, 101, 129),
     -- Rhulk Indomitable
-    (4169648177, 103, 128),
+    (4169648177, 101, 130),
     -- Nezarec Sublime
-    (4169648182, 104, 128);
+    (4169648182, 101, 131);
 
 ALTER TABLE "activity" ADD CONSTRAINT "activity_hash_fk" FOREIGN KEY ("hash") REFERENCES "activity_hash"("hash");

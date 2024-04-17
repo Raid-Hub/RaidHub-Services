@@ -173,7 +173,10 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 			return nil, err
 		}
 
-		processedPlayerActivity.Player.LastSeen = startDate
+		processedPlayerActivity.Player.LastSeen = startDate.Add(time.Duration(
+			processedPlayerActivity.Characters[0].StartSeconds+
+				processedPlayerActivity.Characters[0].TimePlayedSeconds,
+		) * time.Second)
 		processedPlayerActivity.Player.MembershipId = membershipId
 		if destinyUserInfo.MembershipType != 0 {
 			processedPlayerActivity.Player.MembershipType = new(int)

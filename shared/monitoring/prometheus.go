@@ -31,14 +31,6 @@ var PGCRCrawlLag = prometheus.NewHistogramVec(
 	[]string{"status", "attempts"},
 )
 
-var PGCRCrawlTime = prometheus.NewHistogramVec(
-	prometheus.HistogramOpts{
-		Name:    "pgcr_crawl_summary_req_time",
-		Buckets: []float64{100, 200, 300, 400, 500, 600, 700, 800, 1000, 1200, 1500, 2000, 5000, 10000},
-	},
-	[]string{"status", "attempts"},
-)
-
 var GetPostGameCarnageReportRequest = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "get_pgcr_req",
@@ -51,7 +43,6 @@ var GetPostGameCarnageReportRequest = prometheus.NewHistogramVec(
 func RegisterPrometheus(port int) {
 	prometheus.MustRegister(ActiveWorkers)
 	prometheus.MustRegister(PGCRCrawlLag)
-	prometheus.MustRegister(PGCRCrawlTime)
 	prometheus.MustRegister(PGCRCrawlStatus)
 	prometheus.MustRegister(GetPostGameCarnageReportRequest)
 

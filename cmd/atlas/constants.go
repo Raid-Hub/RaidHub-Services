@@ -9,5 +9,5 @@ const (
 
 	gapModeWorkers = 500
 
-	retryDelayTime = 5000
+	retryDelayTime = 5500
 )

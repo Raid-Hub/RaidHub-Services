@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	go player_crawl.Register(3)
+	go player_crawl.Register(5)
 	go bonus_pgcr.Register(10)
 	go activity_history.Register(4)
 
