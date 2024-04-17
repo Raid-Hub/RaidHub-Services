@@ -131,6 +131,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer db.Close()
 
 	rows, err := definitions.Query("SELECT json_extract(json, '$.hash'), json_extract(json, '$.displayProperties.name'), json_extract(json, '$.displayProperties.icon') FROM DestinyInventoryItemDefinition WHERE json_extract(json, '$.itemType') = 3")
 	if err != nil {

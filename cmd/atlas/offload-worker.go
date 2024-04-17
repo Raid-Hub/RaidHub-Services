@@ -43,7 +43,7 @@ func offloadWorker(ch chan int64, failuresChannel chan int64, rabbitChannel *amq
 				}
 
 				// Exponential Backoff
-				time.Sleep(time.Duration(8*i*i) * time.Second)
+				time.Sleep(time.Duration(10*i*i) * time.Second)
 			}
 			logMissedInstance(instanceId, startTime, false)
 			failuresChannel <- instanceId

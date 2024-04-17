@@ -16,7 +16,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failuresChannel chan int64, offloadChannel chan int64, rabbitChannel *amqp.Channel, db *sql.DB) {
+func Worker(wg *sync.WaitGroup, ch chan int64, failuresChannel chan int64, offloadChannel chan int64, rabbitChannel *amqp.Channel, db *sql.DB) {
 	defer wg.Done()
 
 	securityKey := os.Getenv("BUNGIE_API_KEY")
@@ -24,12 +24,7 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 
 	client := &http.Client{}
 
-	randomVariation := retryDelayTime / 2
-
-	var totalWorkerNotFounds int = 0
-	// circular buffer
-	var behindHead [circularBufferSize]float64
-	cb := 0
+	randomVariation := retryDelayTime / 3
 
 	for instanceID := range ch {
 		startTime := time.Now()
@@ -39,14 +34,19 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 		var result pgcr.PGCRResult
 		var lag *time.Duration
 		var reqTime time.Duration
+
+		var statusStr string
+		var attemptsStr string
 		for {
 			reqStartTime := time.Now()
 			result, lag = pgcr.FetchAndStorePGCR(client, instanceID, db, rabbitChannel, proxy, securityKey)
 
+			statusStr = fmt.Sprintf("%d", result)
+			attemptsStr = fmt.Sprintf("%d", i+1)
+
+			monitoring.PGCRCrawlStatus.WithLabelValues(statusStr, attemptsStr).Inc()
 			if lag != nil {
-				cb = cb % circularBufferSize
-				behindHead[cb] = lag.Seconds()
-				cb++
+				monitoring.PGCRCrawlLag.WithLabelValues(statusStr, attemptsStr).Observe(float64(lag.Seconds()))
 			}
 
 			// Handle the result
@@ -65,7 +65,8 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 			} else if result == pgcr.NotFound {
 				notFoundCount++
 			} else if result == pgcr.SystemDisabled {
-				time.Sleep(60 * time.Second)
+				monitoring.PGCRCrawlLag.WithLabelValues(statusStr, attemptsStr).Observe(0)
+				time.Sleep(45 * time.Second)
 				continue
 			} else if result == pgcr.InsufficientPrivileges {
 				failuresChannel <- instanceID
@@ -89,21 +90,5 @@ func Worker(wg *sync.WaitGroup, ch chan int64, results chan *WorkerResult, failu
 			time.Sleep(timeout)
 			i++
 		}
-
-		statusStr := fmt.Sprintf("%d", result)
-		attemptsStr := fmt.Sprintf("%d", i+1)
-
-		monitoring.PGCRCrawlStatus.WithLabelValues(statusStr, attemptsStr).Inc()
-		if lag != nil {
-			monitoring.PGCRCrawlLag.WithLabelValues(statusStr, attemptsStr).Observe(float64(lag.Seconds()))
-		}
-
-		// Track the number of not founds for this worker
-		totalWorkerNotFounds += notFoundCount
-	}
-
-	results <- &WorkerResult{
-		Lag:       behindHead[:],
-		NotFounds: totalWorkerNotFounds,
 	}
 }
