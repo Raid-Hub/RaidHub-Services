@@ -3,6 +3,7 @@ package pgcr
 import (
 	"database/sql"
 	"log"
+	"raidhub/shared/async/character_fill"
 	"raidhub/shared/async/player_crawl"
 	"raidhub/shared/bungie"
 	"raidhub/shared/postgres"
@@ -132,7 +133,7 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 
 		// Send a crawl request if needed
 		if playerActivity.Player.MembershipType == nil || *playerActivity.Player.MembershipType == 0 {
-			err = player_crawl.SendPlayerCrawlMessage(channel, playerActivity.Player.MembershipId)
+			err = player_crawl.SendMessage(channel, playerActivity.Player.MembershipId)
 			if err != nil {
 				log.Fatalf("Failed to send player crawl request: %s", err)
 			}
@@ -197,6 +198,10 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 			close(errs)
 			for err := range errs {
 				return nil, false, err
+			}
+
+			if character.ClassHash == nil {
+				character_fill.SendMessage(channel, playerActivity.Player.MembershipId, character.CharacterId, pgcr.InstanceId)
 			}
 		}
 

@@ -28,7 +28,7 @@ func main() {
 		log.Fatalf("Failed to parse membership id: %s", err)
 	}
 
-	activity_history.SendActivityHistoryRequest(rabbitChannel, 3, 4611686018488107374)
+	activity_history.SendMessage(rabbitChannel, 3, 4611686018488107374)
 
 	wg.Wait()
 	log.Println("Queued all players for crawl and activity history. Make sure to run bin/hermes")

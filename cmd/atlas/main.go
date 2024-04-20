@@ -2,11 +2,16 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"math"
-	"sort"
+	"net/http"
+	"net/url"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/joho/godotenv"
 
@@ -76,12 +81,12 @@ func run(latestId int64, db *sql.DB) {
 	defer rabbitChannel.Close()
 
 	consumerConfig := ConsumerConfig{
-		LatestId:         latestId,
-		GapMode:          false,
-		FailuresChannel:  make(chan int64),
-		SuccessChannel:   make(chan int64),
-		MalformedChannel: make(chan int64),
-		RabbitChannel:    rabbitChannel,
+		LatestId:        latestId,
+		GapMode:         false,
+		FailuresChannel: make(chan int64),
+		SuccessChannel:  make(chan int64),
+		OffloadChannel:  make(chan int64),
+		RabbitChannel:   rabbitChannel,
 	}
 
 	sendStartUpAlert()
@@ -92,8 +97,8 @@ func run(latestId int64, db *sql.DB) {
 	// Start a goroutine to consume found PGCRs from the gap mode channel
 	go consumeSuccesses(&consumerConfig)
 
-	// Start a goroutine to consume malformed PGCRs
-	go malformedWorker(consumerConfig.MalformedChannel, consumerConfig.RabbitChannel, db)
+	// Start a goroutine to offload malformed or slowly resolving PGCRs
+	go offloadWorker(consumerConfig.OffloadChannel, consumerConfig.FailuresChannel, consumerConfig.RabbitChannel, db)
 
 	for {
 		if !consumerConfig.GapMode {
@@ -113,12 +118,9 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 
 	logWorkersStarting(countWorkers, periodLength, consumerConfig.LatestId)
 
-	// When each worker finishes, it will send its info onto these channels
-	resultsChannel := make(chan *WorkerResult, countWorkers)
-
 	for i := 0; i < countWorkers; i++ {
 		wg.Add(1)
-		go Worker(&wg, ids, resultsChannel, consumerConfig.FailuresChannel, consumerConfig.MalformedChannel, consumerConfig.RabbitChannel, db)
+		go Worker(&wg, ids, consumerConfig.FailuresChannel, consumerConfig.OffloadChannel, consumerConfig.RabbitChannel, db)
 	}
 
 	// Pass IDs to workers
@@ -133,34 +135,25 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 
 	close(ids)
 	wg.Wait()
-	close(resultsChannel)
 
-	var lags []float64
-	var notFound int
-	for result := range resultsChannel {
-		lags = append(lags, result.Lag...)
-		notFound += result.NotFounds
+	medianLag, err := execQuery(`histogram_quantile(0.20, sum(rate(pgcr_crawl_summary_lag_bucket[2m])) by (le))`, 3)
+	if err != nil {
+		log.Fatal(err)
+	} else if medianLag == -1 {
+		medianLag = 900
 	}
 
-	arrSlice := lags[:]
-	sort.Float64s(arrSlice)
-	n := len(arrSlice)
-
-	var medianLag float64
-	if n%2 == 1 {
-		medianLag = arrSlice[n/2]
-	} else if n > 0 {
-		// Even number of elements
-		medianLag = (arrSlice[n/2-1] + arrSlice[n/2]) / 2.0
+	fractionNotFound, err := get404Fraction(4)
+	if err != nil {
+		log.Fatal(err)
 	}
-	fractionNotFound := float64(notFound) / float64(periodLength)
 
 	logIntervalState(medianLag, countWorkers, fractionNotFound*100)
 
 	newWorkers := 0
 	if fractionNotFound == 0 {
 		// how much we expect to get catch up
-		periodLength = countWorkers * 4 * (int(math.Ceil(medianLag)) - 30) / 3
+		periodLength = countWorkers * (int(math.Ceil(medianLag)) - 30) / 6
 		if periodLength < 10_000 {
 			periodLength = 10_000
 		}
@@ -168,13 +161,15 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 		newWorkers = int(math.Ceil(float64(countWorkers) * (1 + float64(medianLag-30)/100)))
 
 	} else {
-		decreaseFraction := (retryDelayTime / 800 * (fractionNotFound - 0.032)) // do not let workers go below 3.2%
-		if decreaseFraction > 0.8 {
-			decreaseFraction = 0.8
+		adjf := fractionNotFound - 0.025 // do not let workers go below 2.5 %
+		decreaseFraction := math.Pow(retryDelayTime/8*math.Abs(adjf), 0.88) / 100
+		if decreaseFraction > 0.65 {
+			decreaseFraction = 0.65
 		}
+		sign := adjf / math.Abs(adjf)
 		// Adjust number of workers for the next period
-		newWorkers = int(math.Round(float64(countWorkers) - decreaseFraction*float64(countWorkers)))
-		periodLength = 500 * newWorkers
+		newWorkers = int(math.Round(float64(countWorkers) - sign*decreaseFraction*float64(countWorkers)))
+		periodLength = 1000 * newWorkers
 	}
 
 	if newWorkers > maxWorkers {
@@ -209,4 +204,62 @@ func spawnGapModeWorkers(db *sql.DB, consumerConfig *ConsumerConfig) {
 
 	close(ids)
 	wg.Wait()
+}
+
+func get404Fraction(intervalMins int) (float64, error) {
+	return execQuery(fmt.Sprintf(`sum(rate(pgcr_crawl_summary_status{status="3"}[%dm])) / sum(rate(pgcr_crawl_summary_status{}[%dm]))`, intervalMins, intervalMins), intervalMins)
+}
+
+func execQuery(query string, intervalMins int) (float64, error) {
+	params := url.Values{}
+	params.Add("query", query)
+	params.Add("start", time.Now().Add(time.Duration(-intervalMins)*time.Minute).Format(time.RFC3339))
+	params.Add("end", time.Now().Format(time.RFC3339))
+	params.Add("step", "1m")
+
+	client := http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	url := fmt.Sprintf("http://localhost:9090/api/v1/query_range?%s", params.Encode())
+
+	resp, err := client.Get(url)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	decoder := json.NewDecoder(resp.Body)
+
+	var res monitoring.QueryRangeResponse
+	err = decoder.Decode(&res)
+	if err != nil {
+		return 0, err
+	}
+
+	// Creates a weighted average over the interval
+	c := 0
+	s := 0.0
+
+	if len(res.Data.Result) == 0 {
+		return -1, nil
+	}
+
+	for idx, y := range res.Data.Result[0].Values {
+		val, err := strconv.ParseFloat(y[1].(string), 64)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if math.IsNaN(val) {
+			continue
+		}
+		c += (idx + 1)
+		s += float64(idx+1) * val
+	}
+
+	if c == 0 {
+		c = 1
+	}
+
+	return s / float64(c), nil
 }

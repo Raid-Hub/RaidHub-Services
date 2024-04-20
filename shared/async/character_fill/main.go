@@ -1,4 +1,4 @@
-package player_crawl
+package character_fill
 
 import (
 	"context"
@@ -9,11 +9,13 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-type PlayerRequest struct {
+type CharacterFillRequest struct {
 	MembershipId string `json:"membershipId"`
+	CharacterId  string `json:"characterId"`
+	InstanceId   string `json:"instanceId"`
 }
 
-const queueName = "player_requests"
+const queueName = "character_fill"
 
 func Create() async.QueueWorker {
 	return async.QueueWorker{
@@ -22,9 +24,11 @@ func Create() async.QueueWorker {
 	}
 }
 
-func SendMessage(ch *amqp.Channel, membershipId int64) error {
-	body, err := json.Marshal(PlayerRequest{
+func SendMessage(ch *amqp.Channel, membershipId int64, characterId int64, instanceId int64) error {
+	body, err := json.Marshal(CharacterFillRequest{
 		MembershipId: strconv.FormatInt(membershipId, 10),
+		CharacterId:  strconv.FormatInt(characterId, 10),
+		InstanceId:   strconv.FormatInt(instanceId, 10),
 	})
 	if err != nil {
 		return err

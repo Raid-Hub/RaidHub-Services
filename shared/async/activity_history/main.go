@@ -16,11 +16,14 @@ type ActivityHistoryRequest struct {
 
 const queueName = "activity_history"
 
-func Register(numWorkers int) {
-	async.RegisterQueueWorker(queueName, numWorkers, process_queue)
+func Create() async.QueueWorker {
+	return async.QueueWorker{
+		QueueName: queueName,
+		Processer: process_queue,
+	}
 }
 
-func SendActivityHistoryRequest(ch *amqp.Channel, membershipType int, membershipId int64) error {
+func SendMessage(ch *amqp.Channel, membershipType int, membershipId int64) error {
 	body, err := json.Marshal(ActivityHistoryRequest{
 		MembershipId:   strconv.FormatInt(membershipId, 10),
 		MembershipType: membershipType,

@@ -44,7 +44,7 @@ CREATE TABLE "activity" (
 -- Raid Completion Leaderboard
 CREATE INDEX "idx_raidhash_date_completed" ON "activity"("raid_hash", "date_completed");
 -- Tag Search Index
-CREATE INDEX "tag_index" ON "activity"("completed", "player_count", "fresh", "flawless");
+CREATE INDEX "tag_index_partial" ON "activity"("completed", "player_count", "fresh", "flawless") WHERE "completed" AND ("player_count" <= 3 OR "flawless");
 -- Speedrun Index
 CREATE INDEX "speedrun_index" ON "activity"("raid_hash", "completed", "fresh", "duration");
 

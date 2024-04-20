@@ -43,7 +43,7 @@ func gapModeWorker(wg *sync.WaitGroup, ch chan int64, foundChannel chan int64, d
 			} else if result == pgcr.SystemDisabled {
 				time.Sleep(30 * time.Second)
 			} else if result == pgcr.InsufficientPrivileges {
-				logInsufficentPrivileges(instanceID, startTime)
+				logInsufficentPrivileges(instanceID)
 				break
 			} else if result == pgcr.InternalError || result == pgcr.BadFormat {
 				log.Println("Error parsing data for instanceId", instanceID)

@@ -23,3 +23,11 @@ type DestinyHistoricalStatsActivity struct {
 	MembershipType       int    `json:"membershipType"`
 	DirectorActivityHash uint32 `json:"directorActivityHash"`
 }
+
+type DestinyCharacterComponent struct {
+	CharacterId    string `json:"characterId"`
+	EmblemPath     string `json:"emblemPath"`
+	EmblemHash     uint32 `json:"emblemHash"`
+	ClassHash      uint32 `json:"classHash"`
+	DateLastPlayed string `json:"dateLastPlayed"`
+}

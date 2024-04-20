@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"raidhub/shared/async"
 	"raidhub/shared/bungie"
 	"raidhub/shared/postgres"
 	"strconv"
@@ -13,9 +14,9 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func process_queue(msgs <-chan amqp.Delivery, db *sql.DB) {
+func process_queue(qw *async.QueueWorker, msgs <-chan amqp.Delivery) {
 	for msg := range msgs {
-		process_request(&msg, db)
+		process_request(&msg, qw.Db)
 	}
 }
 
@@ -63,7 +64,7 @@ func get_player(membershipId string, db *sql.DB) (int, *time.Time, error) {
 }
 
 func crawl_player_profiles(destinyMembershipId string, db *sql.DB) {
-	profiles, err := bungie.GetLinkedProfiles(-1, destinyMembershipId)
+	profiles, err := bungie.GetLinkedProfiles(-1, destinyMembershipId, true)
 	if err != nil {
 		log.Printf("Failed to get linked profiles: %s", err)
 	} else if len(profiles) == 0 {

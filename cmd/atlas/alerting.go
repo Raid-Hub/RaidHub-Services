@@ -149,7 +149,7 @@ func logMissedInstanceWarning(instanceId int64, startTime time.Time) {
 	log.Printf("Warning: instance id %d has not resolved in %1.f seconds", instanceId, time.Since(startTime).Seconds())
 }
 
-func logInsufficentPrivileges(instanceId int64, startTime time.Time) {
+func logInsufficentPrivileges(instanceId int64) {
 	webhook := discord.Webhook{
 		Embeds: []discord.Embed{{
 			Title: "InsufficientPrivileges Response",
@@ -164,7 +164,6 @@ func logInsufficentPrivileges(instanceId int64, startTime time.Time) {
 	}
 	discord.SendWebhook(getAtlasWebhookURL(), &webhook)
 	log.Printf("Warning: InsufficientPrivileges response for instanceId %d", instanceId)
-	logMissedInstance(instanceId, startTime, false)
 }
 
 func enterGapModeAlert(variation int64, startId int64, density float64) {

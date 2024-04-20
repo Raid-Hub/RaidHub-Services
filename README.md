@@ -1,27 +1,21 @@
 # RaidHub Services
 
-This repo contains the main services RaidHub uses to populate our database and maintain our data.
+This repo contains the main services RaidHub uses to populate our database and maintain our data platform.
 
-### Atlas
-
-This is our PGCR crawler
-
-### Hades
-
-This tool just processes any missed PGCRs, usually on a cron job
-
-## Commands
+## Pre-reqs
+You will need to install docker desktop to start the service stack
 
 ### Build
 
-- `make postgres` - Run Postgres Database in Docker
-- `make atlas` - Build the Atlas PGCR crawler binary
-- `make hades` - Build the Hades binary
-- `make hermes` - Build the message queue worker
-- `make bin` - Build all Go binaries
+- `make` - Compile binaries
+- `make services` - Spin up the services stack
 
 ### Run
 
-- `bin/atlas <workers>` - Run the PGCR crawler
+- `bin/atlas` - Run the PGCR crawler
 - `bin/hades` - Run the missed PGCR collector
 - `bin/hermes` - Run the message queue worker
+- `bin/athena` - Download manifest definitions
+
+## Migrations
+- `bin/migrate` - Migrate your local database

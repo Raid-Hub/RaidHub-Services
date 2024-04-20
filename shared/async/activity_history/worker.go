@@ -1,7 +1,6 @@
 package activity_history
 
 import (
-	"database/sql"
 	"encoding/json"
 	"log"
 	"raidhub/shared/async"
@@ -27,8 +26,7 @@ func create_outbound_channel() {
 	})
 }
 
-func process_queue(msgs <-chan amqp.Delivery, db *sql.DB) {
-	db.Close() // Not needed
+func process_queue(qw *async.QueueWorker, msgs <-chan amqp.Delivery) {
 	create_outbound_channel()
 	for msg := range msgs {
 		process_request(&msg)
@@ -60,7 +58,7 @@ func process_request(msg *amqp.Delivery) {
 	wg.Add(1)
 	go func() {
 		for instanceId := range out {
-			bonus_pgcr.SendBonusPGCRMessage(outgoing, instanceId)
+			bonus_pgcr.SendMessage(outgoing, instanceId)
 		}
 		wg.Done()
 	}()

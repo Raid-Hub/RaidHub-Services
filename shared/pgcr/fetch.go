@@ -2,6 +2,7 @@ package pgcr
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"raidhub/shared/bungie"
@@ -37,6 +38,13 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, channe
 		var data bungie.BungieError
 		if err := decoder.Decode(&data); err != nil {
 			log.Printf("Error decoding response for instanceId %d: %s", instanceID, err)
+			monitoring.GetPostGameCarnageReportRequest.WithLabelValues(fmt.Sprintf("Unknown%d", statusCode)).Observe(float64(time.Since(start).Milliseconds()))
+			if statusCode == 404 {
+				return NotFound, nil
+			} else if statusCode == 403 {
+				// Rate Limit
+				time.Sleep(30 * time.Second)
+			}
 			return BadFormat, nil
 		}
 		monitoring.GetPostGameCarnageReportRequest.WithLabelValues(data.ErrorStatus).Observe(float64(time.Since(start).Milliseconds()))

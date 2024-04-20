@@ -15,11 +15,14 @@ type PGCRRequest struct {
 
 const queueName = "bonus_pgcr"
 
-func Register(numWorkers int) {
-	async.RegisterQueueWorker(queueName, numWorkers, process_queue)
+func Create() async.QueueWorker {
+	return async.QueueWorker{
+		QueueName: queueName,
+		Processer: process_queue,
+	}
 }
 
-func SendBonusPGCRMessage(ch *amqp.Channel, instanceId int64) error {
+func SendMessage(ch *amqp.Channel, instanceId int64) error {
 	body, err := json.Marshal(PGCRRequest{
 		InstanceId: strconv.FormatInt(instanceId, 10),
 	})

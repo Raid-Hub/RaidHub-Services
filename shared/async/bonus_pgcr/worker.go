@@ -31,14 +31,14 @@ func create_outbound_channel() {
 	})
 }
 
-func process_queue(msgs <-chan amqp.Delivery, db *sql.DB) {
+func process_queue(qw *async.QueueWorker, msgs <-chan amqp.Delivery) {
 	client := &http.Client{}
 	apiKey := os.Getenv("BUNGIE_API_KEY")
 	baseUrl := os.Getenv("PGCR_URL_BASE")
 
 	create_outbound_channel()
 	for msg := range msgs {
-		process_request(&msg, db, client, baseUrl, apiKey)
+		process_request(&msg, qw.Db, client, baseUrl, apiKey)
 	}
 }
 
