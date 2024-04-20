@@ -165,20 +165,29 @@ func worker(ch chan int64, successes chan int64, failures chan int64, db *sql.DB
 	client := &http.Client{}
 
 	for instanceID := range ch {
-		result, _ := pgcr.FetchAndStorePGCR(client, instanceID, db, rabbitChannel, proxy, securityKey)
+		result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceID, proxy, securityKey)
+		if err != nil {
+			log.Println(err)
+		}
 
-		if result == pgcr.NonRaid || result == pgcr.AlreadyExists {
-			log.Printf("Duplicate or non raid %d", instanceID)
+		if result == pgcr.NonRaid {
 			continue
 		} else if result == pgcr.Success {
-			log.Printf("Found raid %d", instanceID)
-			successes <- instanceID
-			continue
+			_, committed, err := pgcr.StorePGCR(activity, raw, db, rabbitChannel)
+			if err != nil {
+				log.Printf("Failed to store raid %d: %s", instanceID, err)
+				writeMissedLog(instanceID)
+				failures <- instanceID
+			} else {
+				if committed {
+					log.Printf("Found raid %d", instanceID)
+				}
+				successes <- instanceID
+			}
 		} else {
-			log.Printf("Could not resolve instance id %d", instanceID)
+			log.Printf("Could not resolve instance id %d: %s", instanceID, err)
 			writeMissedLog(instanceID)
 			failures <- instanceID
-			continue
 		}
 	}
 }

@@ -1,7 +1,7 @@
 default: bin
 
 # Docker Services
-DOCKER_COMPOSE = docker-compose -f docker/docker-compose.yml --env-file ./.env
+DOCKER_COMPOSE = docker-compose -f docker-compose.yml --env-file ./.env
 
 up services:
 	$(DOCKER_COMPOSE) up -d postgres rabbitmq

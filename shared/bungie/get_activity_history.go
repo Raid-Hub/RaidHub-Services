@@ -40,7 +40,7 @@ func GetActivityHistory(membershipType int, membershipId string, characterId str
 	}()
 
 	var wg sync.WaitGroup
-	for i := 0; i < concurrentPages; i++ {
+	for j := 0; j < concurrentPages; j++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

@@ -8,8 +8,6 @@ CREATE TABLE player (
     bungie_global_display_name_code String,
     bungie_name                     String,
     last_seen                       DateTime,
-    clears                          UInt32,
-    fresh_clears                    UInt32,
     sherpas                         UInt32,
     sum_of_best                     Int32,
 

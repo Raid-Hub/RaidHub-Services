@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"raidhub/shared/clickhouse"
 	"sync"
 
 	"github.com/joho/godotenv"
@@ -51,10 +52,11 @@ func Cleanup() {
 }
 
 type QueueWorker struct {
-	QueueName string
-	Conn      *amqp.Connection
-	Db        *sql.DB
-	Processer func(qw *QueueWorker, msgs <-chan amqp.Delivery)
+	QueueName  string
+	Conn       *amqp.Connection
+	Db         *sql.DB
+	Clickhouse *clickhouse.ClickhouseClient
+	Processer  func(qw *QueueWorker, msgs <-chan amqp.Delivery)
 }
 
 func (qw *QueueWorker) Register(numWorkers int) {

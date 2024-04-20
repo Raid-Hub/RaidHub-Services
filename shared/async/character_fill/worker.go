@@ -26,7 +26,7 @@ func process_request(msg *amqp.Delivery, db *sql.DB) {
 
 	var request CharacterFillRequest
 	if err := json.Unmarshal(msg.Body, &request); err != nil {
-		log.Printf("Failed to unmarshal message: %s", err)
+		log.Fatalf("Failed to unmarshal message: %s", err)
 		return
 	}
 

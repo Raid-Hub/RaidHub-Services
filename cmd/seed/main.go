@@ -13,21 +13,17 @@ func main() {
 	// Connect to the RabbitMQ
 	conn, err := async.Init()
 	if err != nil {
-		log.Fatalf("Failed to create connection: %s", err)
+		log.Fatalf("Failed to create rabbit connection: %s", err)
 	}
 	defer async.Cleanup()
 
 	rabbitChannel, err := conn.Channel()
 	if err != nil {
-		log.Fatalf("Failed to create channel: %s", err)
+		log.Fatalf("Failed to create rabbit channel: %s", err)
 	}
 	defer rabbitChannel.Close()
 
 	var wg sync.WaitGroup
-	if err != nil {
-		log.Fatalf("Failed to parse membership id: %s", err)
-	}
-
 	activity_history.SendMessage(rabbitChannel, 3, 4611686018488107374)
 
 	wg.Wait()

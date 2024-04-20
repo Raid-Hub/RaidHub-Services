@@ -11,49 +11,51 @@ import (
 )
 
 type ProcessedActivity struct {
-	InstanceId       int64
-	Hash             uint32
-	Completed        bool
-	Flawless         *bool
-	Fresh            *bool
-	PlayerCount      int
-	DateStarted      time.Time
-	DateCompleted    time.Time
-	DurationSeconds  int
-	MembershipType   int
-	Score            int
-	PlayerActivities []ProcessedPlayerActivity
+	InstanceId      int64                     `json:"instanceId"`
+	Hash            uint32                    `json:"hash"`
+	Completed       bool                      `json:"completed"`
+	Flawless        *bool                     `json:"flawless"`
+	Fresh           *bool                     `json:"fresh"`
+	PlayerCount     int                       `json:"playerCount"`
+	DateStarted     time.Time                 `json:"dateStarted"`
+	DateCompleted   time.Time                 `json:"dateCompleted"`
+	DurationSeconds int                       `json:"durationSeconds"`
+	MembershipType  int                       `json:"membershipType"`
+	Score           int                       `json:"score"`
+	Players         []ProcessedActivityPlayer `json:"players"`
 }
 
-type ProcessedPlayerActivity struct {
-	Finished          bool
-	TimePlayedSeconds int
-	Player            postgres.Player
-	Characters        []ProcessedPlayerActivityCharacter
+type ProcessedActivityPlayer struct {
+	Finished          bool                         `json:"finished"`
+	TimePlayedSeconds int                          `json:"timePlayedSeconds"`
+	Player            postgres.Player              `json:"player"`
+	Characters        []ProcessedActivityCharacter `json:"characters"`
+	IsFirstClear      bool                         `json:"isFirstClear"` // Not set by default
+	Sherpas           int                          `json:"sherpas"`      // Not set by default
 }
 
-type ProcessedPlayerActivityCharacter struct {
-	CharacterId       int64
-	ClassHash         *uint32
-	EmblemHash        *uint32
-	Completed         bool
-	Score             int
-	Kills             int
-	Deaths            int
-	Assists           int
-	PrecisionKills    int
-	SuperKills        int
-	GrenadeKills      int
-	MeleeKills        int
-	StartSeconds      int
-	TimePlayedSeconds int
-	Weapons           []ProcessedCharacterActivityWeapon
+type ProcessedActivityCharacter struct {
+	CharacterId       int64                              `json:"characterId"`
+	ClassHash         *uint32                            `json:"classHash"`
+	EmblemHash        *uint32                            `json:"emblemHash"`
+	Completed         bool                               `json:"completed"`
+	Score             int                                `json:"score"`
+	Kills             int                                `json:"kills"`
+	Deaths            int                                `json:"deaths"`
+	Assists           int                                `json:"assists"`
+	PrecisionKills    int                                `json:"precisionKills"`
+	SuperKills        int                                `json:"superKills"`
+	GrenadeKills      int                                `json:"grenadeKills"`
+	MeleeKills        int                                `json:"meleeKills"`
+	StartSeconds      int                                `json:"startSeconds"`
+	TimePlayedSeconds int                                `json:"timePlayedSeconds"`
+	Weapons           []ProcessedCharacterActivityWeapon `json:"weapons"`
 }
 
 type ProcessedCharacterActivityWeapon struct {
-	WeaponHash     uint32
-	Kills          int
-	PrecisionKills int
+	WeaponHash     uint32 `json:"weaponHash"`
+	Kills          int    `json:"kills"`
+	PrecisionKills int    `json:"precisionKills"`
 }
 
 func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*ProcessedActivity, error) {
@@ -112,10 +114,10 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 		}
 	}
 
-	var processedPlayerActivities []ProcessedPlayerActivity
+	var processedPlayerActivities []ProcessedActivityPlayer
 	for _, entries := range players {
-		processedPlayerActivity := ProcessedPlayerActivity{
-			Characters: []ProcessedPlayerActivityCharacter{},
+		processedPlayerActivity := ProcessedActivityPlayer{
+			Characters: []ProcessedActivityCharacter{},
 			Player:     postgres.Player{},
 		}
 
@@ -124,7 +126,7 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 			if err != nil {
 				return nil, err
 			}
-			character := ProcessedPlayerActivityCharacter{
+			character := ProcessedActivityCharacter{
 				CharacterId: characterId,
 				Completed:   getStat(entry.Values, "completed") == 1,
 				Weapons:     []ProcessedCharacterActivityWeapon{},
@@ -179,18 +181,15 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 		) * time.Second)
 		processedPlayerActivity.Player.MembershipId = membershipId
 		if destinyUserInfo.MembershipType != 0 {
-			processedPlayerActivity.Player.MembershipType = new(int)
-			*processedPlayerActivity.Player.MembershipType = destinyUserInfo.MembershipType
-			processedPlayerActivity.Player.IconPath = new(string)
-			*processedPlayerActivity.Player.IconPath = *destinyUserInfo.IconPath
-			processedPlayerActivity.Player.DisplayName = new(string)
-			*processedPlayerActivity.Player.DisplayName = *destinyUserInfo.DisplayName
+			processedPlayerActivity.Player.MembershipType = &destinyUserInfo.MembershipType
+			processedPlayerActivity.Player.IconPath = destinyUserInfo.IconPath
+			processedPlayerActivity.Player.DisplayName = destinyUserInfo.DisplayName
+
 			if destinyUserInfo.BungieGlobalDisplayNameCode != nil {
-				processedPlayerActivity.Player.BungieGlobalDisplayNameCode = new(string)
-				*processedPlayerActivity.Player.BungieGlobalDisplayNameCode = *bungie.FixBungieGlobalDisplayNameCode(destinyUserInfo.BungieGlobalDisplayNameCode)
+				processedPlayerActivity.Player.BungieGlobalDisplayNameCode = bungie.FixBungieGlobalDisplayNameCode(destinyUserInfo.BungieGlobalDisplayNameCode)
+
 				if destinyUserInfo.BungieGlobalDisplayName != nil && *destinyUserInfo.BungieGlobalDisplayName != "" {
-					processedPlayerActivity.Player.BungieGlobalDisplayName = new(string)
-					*processedPlayerActivity.Player.BungieGlobalDisplayName = *destinyUserInfo.BungieGlobalDisplayName
+					processedPlayerActivity.Player.BungieGlobalDisplayName = destinyUserInfo.BungieGlobalDisplayName
 				}
 			}
 		}
@@ -198,7 +197,7 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 		processedPlayerActivities = append(processedPlayerActivities, processedPlayerActivity)
 	}
 
-	result.PlayerActivities = processedPlayerActivities
+	result.Players = processedPlayerActivities
 	result.PlayerCount = len(players)
 
 	result.Completed = false

@@ -1,22 +1,18 @@
 package pgcr
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 	"raidhub/shared/bungie"
 	"raidhub/shared/monitoring"
 	"time"
-
-	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type PGCRResult int
 
 const (
-	Success                PGCRResult = 0
-	AlreadyExists          PGCRResult = 1
+	Success                PGCRResult = 1
 	NonRaid                PGCRResult = 2
 	NotFound               PGCRResult = 3
 	SystemDisabled         PGCRResult = 4
@@ -25,12 +21,12 @@ const (
 	InternalError          PGCRResult = 7
 )
 
-func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, channel *amqp.Channel, baseURL string, apiKey string) (PGCRResult, *time.Duration) {
+func FetchAndProcessPGCR(client *http.Client, instanceID int64, baseURL string, apiKey string) (PGCRResult, *ProcessedActivity, *bungie.DestinyPostGameCarnageReport, error) {
 	start := time.Now()
 	decoder, statusCode, cleanup, err := bungie.GetPGCR(client, baseURL, instanceID, apiKey)
 	if err != nil {
 		log.Printf("Error fetching instanceId %d: %s", instanceID, err)
-		return InternalError, nil
+		return InternalError, nil, nil, err
 	}
 	defer cleanup()
 
@@ -40,12 +36,12 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, channe
 			log.Printf("Error decoding response for instanceId %d: %s", instanceID, err)
 			monitoring.GetPostGameCarnageReportRequest.WithLabelValues(fmt.Sprintf("Unknown%d", statusCode)).Observe(float64(time.Since(start).Milliseconds()))
 			if statusCode == 404 {
-				return NotFound, nil
+				return NotFound, nil, nil, err
 			} else if statusCode == 403 {
 				// Rate Limit
 				time.Sleep(30 * time.Second)
 			}
-			return BadFormat, nil
+			return BadFormat, nil, nil, err
 		}
 		monitoring.GetPostGameCarnageReportRequest.WithLabelValues(data.ErrorStatus).Observe(float64(time.Since(start).Milliseconds()))
 
@@ -58,60 +54,40 @@ func FetchAndStorePGCR(client *http.Client, instanceID int64, db *sql.DB, channe
 
 		if data.ErrorCode == 1653 {
 			// PGCRNotFound
-			return NotFound, nil
+			return NotFound, nil, nil, fmt.Errorf("%s", data.ErrorStatus)
 		}
 
 		log.Printf("Error response for instanceId %d: %s (%d)", instanceID, data.Message, data.ErrorCode)
 		if data.ErrorCode == 5 {
 			// SystemDisabled
-			time.Sleep(30 * time.Second)
-			return SystemDisabled, nil
+			return SystemDisabled, nil, nil, fmt.Errorf("%s", data.ErrorStatus)
 		} else if data.ErrorCode == 1672 {
 			// BabelTimeout
-			time.Sleep(5 * time.Second)
-			return NotFound, nil
+			return NotFound, nil, nil, fmt.Errorf("%s", data.ErrorStatus)
 		} else if data.ErrorCode == 12 {
 			// InsufficientPrivileges, redacted
-			return InsufficientPrivileges, nil
+			return InsufficientPrivileges, nil, nil, fmt.Errorf("%s", data.ErrorStatus)
 		}
 
-		return BadFormat, nil
+		return BadFormat, nil, nil, nil
 	}
 
 	var data bungie.DestinyPostGameCarnageReportResponse
 	if err := decoder.Decode(&data); err != nil {
 		log.Printf("Error decoding response for instanceId %d: %s", instanceID, err)
-		return BadFormat, nil
+		return BadFormat, nil, nil, err
 	}
 	monitoring.GetPostGameCarnageReportRequest.WithLabelValues(data.ErrorStatus).Observe(float64(time.Since(start).Milliseconds()))
 
 	if data.Response.ActivityDetails.Mode != 4 {
-		// Skip non raid
-		startDate, err := time.Parse(time.RFC3339, data.Response.Period)
-		if err != nil {
-			log.Println(err)
-			return InternalError, nil
-		}
-		endDate := CalculateDateCompleted(startDate, data.Response.Entries[0])
-
-		lag := time.Since(endDate)
-
-		return NonRaid, &lag
+		return NonRaid, nil, &data.Response, nil
 	}
 
 	pgcr, err := ProcessDestinyReport(&data.Response)
 	if err != nil {
 		log.Println(err)
-		return BadFormat, nil
+		return BadFormat, nil, nil, err
 	}
 
-	lag, committed, err := StorePGCR(pgcr, &data.Response, db, channel)
-	if err != nil {
-		log.Println(err)
-		return InternalError, nil
-	} else if committed {
-		return Success, lag
-	} else {
-		return AlreadyExists, lag
-	}
+	return Success, pgcr, &data.Response, nil
 }

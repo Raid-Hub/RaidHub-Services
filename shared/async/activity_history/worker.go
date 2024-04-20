@@ -42,7 +42,7 @@ func process_request(msg *amqp.Delivery) {
 
 	var request ActivityHistoryRequest
 	if err := json.Unmarshal(msg.Body, &request); err != nil {
-		log.Printf("Failed to unmarshal message: %s", err)
+		log.Fatalf("Failed to unmarshal message: %s", err)
 		return
 	}
 
@@ -58,7 +58,7 @@ func process_request(msg *amqp.Delivery) {
 	wg.Add(1)
 	go func() {
 		for instanceId := range out {
-			bonus_pgcr.SendMessage(outgoing, instanceId)
+			bonus_pgcr.SendFetchMessage(outgoing, instanceId)
 		}
 		wg.Done()
 	}()
