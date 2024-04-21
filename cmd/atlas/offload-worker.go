@@ -14,7 +14,6 @@ import (
 
 func offloadWorker(ch chan int64, failuresChannel chan int64, rabbitChannel *amqp.Channel, db *sql.DB) {
 	securityKey := os.Getenv("BUNGIE_API_KEY")
-	proxy := os.Getenv("PGCR_URL_BASE")
 
 	client := &http.Client{}
 
@@ -24,7 +23,7 @@ func offloadWorker(ch chan int64, failuresChannel chan int64, rabbitChannel *amq
 			log.Printf("Offloading instanceId %d", instanceId)
 			startTime := time.Now()
 			for i := 1; i <= 5; i++ {
-				result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceId, proxy, securityKey)
+				result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceId, securityKey)
 
 				if err != nil {
 					log.Println(err)

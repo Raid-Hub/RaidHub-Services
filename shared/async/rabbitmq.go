@@ -68,7 +68,7 @@ func (qw *QueueWorker) Register(numWorkers int) {
 
 	q, err := ch.QueueDeclare(
 		qw.QueueName,
-		false,
+		true,
 		false,
 		false,
 		false,

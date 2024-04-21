@@ -24,7 +24,7 @@ type DestinyHistoricalStatsPerCharacter struct {
 }
 
 func GetHistoricalStats(membershipType int, membershipId string) (*DestinyHistoricalStatsAccountResult, error) {
-	url := fmt.Sprintf("https://www.bungie.net/Platform/Destiny2/%d/Account/%s/Stats/", membershipType, membershipId)
+	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Account/%s/Stats/", getBungieURL(), membershipType, membershipId)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err

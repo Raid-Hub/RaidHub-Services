@@ -160,12 +160,11 @@ func main() {
 func worker(ch chan int64, successes chan int64, failures chan int64, db *sql.DB, rabbitChannel *amqp091.Channel, wg *sync.WaitGroup) {
 	defer wg.Done()
 	securityKey := os.Getenv("BUNGIE_API_KEY")
-	proxy := os.Getenv("PGCR_URL_BASE")
 
 	client := &http.Client{}
 
 	for instanceID := range ch {
-		result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceID, proxy, securityKey)
+		result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceID, securityKey)
 		if err != nil {
 			log.Println(err)
 		}

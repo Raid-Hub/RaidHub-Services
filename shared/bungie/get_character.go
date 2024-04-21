@@ -24,7 +24,7 @@ type SingleComponentResponseOfDestinyCharacterComponent struct {
 }
 
 func GetCharacter(membershipType int32, membershipId string, characterId string) (*DestinyCharacterResponse, error) {
-	url := fmt.Sprintf("https://www.bungie.net/Platform/Destiny2/%d/Profile/%s/Character/%s/?components=200", membershipType, membershipId, characterId)
+	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Profile/%s/Character/%s/?components=200", getBungieURL(), membershipType, membershipId, characterId)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err

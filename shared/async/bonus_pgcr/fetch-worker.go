@@ -20,15 +20,14 @@ type PGCRFetchRequest struct {
 func process_fetch_queue(qw *async.QueueWorker, msgs <-chan amqp.Delivery) {
 	client := &http.Client{}
 	apiKey := os.Getenv("BUNGIE_API_KEY")
-	baseUrl := os.Getenv("PGCR_URL_BASE")
 
 	create_outbound_channel(qw.Conn)
 	for msg := range msgs {
-		process_fetch_request(&msg, qw.Db, client, baseUrl, apiKey)
+		process_fetch_request(&msg, qw.Db, client, apiKey)
 	}
 }
 
-func process_fetch_request(msg *amqp.Delivery, db *sql.DB, client *http.Client, baseUrl string, apiKey string) {
+func process_fetch_request(msg *amqp.Delivery, db *sql.DB, client *http.Client, apiKey string) {
 	defer func() {
 		if err := msg.Ack(false); err != nil {
 			log.Printf("Failed to acknowledge message: %v", err)
@@ -55,7 +54,7 @@ func process_fetch_request(msg *amqp.Delivery, db *sql.DB, client *http.Client, 
 			return
 		}
 
-		result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceIdInt, baseUrl, apiKey)
+		result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceIdInt, apiKey)
 
 		if err != nil {
 			log.Printf("Error fetching instanceId %d: %s", instanceIdInt, err)

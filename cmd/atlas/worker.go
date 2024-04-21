@@ -20,7 +20,6 @@ func Worker(wg *sync.WaitGroup, ch chan int64, failuresChannel chan int64, offlo
 	defer wg.Done()
 
 	securityKey := os.Getenv("BUNGIE_API_KEY")
-	proxy := os.Getenv("PGCR_URL_BASE")
 
 	client := &http.Client{}
 
@@ -34,7 +33,7 @@ func Worker(wg *sync.WaitGroup, ch chan int64, failuresChannel chan int64, offlo
 
 		for {
 			reqStartTime := time.Now()
-			result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceID, proxy, securityKey)
+			result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceID, securityKey)
 			if err != nil {
 				log.Println(err)
 			}

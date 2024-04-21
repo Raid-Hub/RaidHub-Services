@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"raidhub/shared/bungie"
 	"raidhub/shared/monitoring"
+	"sync"
 	"time"
 )
 
@@ -21,9 +23,24 @@ const (
 	InternalError          PGCRResult = 7
 )
 
-func FetchAndProcessPGCR(client *http.Client, instanceID int64, baseURL string, apiKey string) (PGCRResult, *ProcessedActivity, *bungie.DestinyPostGameCarnageReport, error) {
+var (
+	pgcrUrlBase string
+	once        sync.Once
+)
+
+func getPgcrURL() string {
+	once.Do(func() {
+		pgcrUrlBase = os.Getenv("PGCR_URL_BASE")
+		if pgcrUrlBase == "" {
+			pgcrUrlBase = "https://stats.bungie.net/"
+		}
+	})
+	return pgcrUrlBase
+}
+
+func FetchAndProcessPGCR(client *http.Client, instanceID int64, apiKey string) (PGCRResult, *ProcessedActivity, *bungie.DestinyPostGameCarnageReport, error) {
 	start := time.Now()
-	decoder, statusCode, cleanup, err := bungie.GetPGCR(client, baseURL, instanceID, apiKey)
+	decoder, statusCode, cleanup, err := bungie.GetPGCR(client, getPgcrURL(), instanceID, apiKey)
 	if err != nil {
 		log.Printf("Error fetching instanceId %d: %s", instanceID, err)
 		return InternalError, nil, nil, err

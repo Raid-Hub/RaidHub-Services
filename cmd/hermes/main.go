@@ -26,7 +26,7 @@ func main() {
 	}
 	defer async.Cleanup()
 
-	chClient, err := clickhouse.Connect(true)
+	chClient, err := clickhouse.Connect(false)
 	if err != nil {
 		log.Fatal("Error connecting to clickhouse", err)
 	}
@@ -39,12 +39,12 @@ func main() {
 	playersQueue := player_crawl.Create()
 	playersQueue.Db = db
 	playersQueue.Conn = conn
-	go playersQueue.Register(0)
+	go playersQueue.Register(4)
 
 	activityCharactersQueue := character_fill.Create()
 	activityCharactersQueue.Db = db
 	activityCharactersQueue.Conn = conn
-	go activityCharactersQueue.Register(0)
+	go activityCharactersQueue.Register(4)
 
 	pgcrsClickhouseQueue := pgcr.CreateClickhouseQueue()
 	pgcrsClickhouseQueue.Db = db
@@ -60,7 +60,7 @@ func main() {
 	bonusPgcrsStoreQueue := bonus_pgcr.CreateStoreWorker()
 	bonusPgcrsStoreQueue.Db = db
 	bonusPgcrsStoreQueue.Conn = conn
-	// 1 worker because it's a write operation with related records which would cause deadlocks
+	// 1 worker because it's a write operation with often related records which would cause deadlocks
 	go bonusPgcrsStoreQueue.Register(1)
 
 	monitoring.RegisterPrometheus(8083)

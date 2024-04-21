@@ -74,7 +74,7 @@ func GetActivityHistory(membershipType int, membershipId string, characterId str
 
 func getActivityHistoryPage(membershipType int, membershipId string, characterId string, page int) ([]DestinyHistoricalStatsPeriodGroup, error) {
 	log.Printf("Getting /Destiny2/%d/Account/%s/Character/%s/ page=%d", membershipType, membershipId, characterId, page)
-	url := fmt.Sprintf("https://www.bungie.net/Platform/Destiny2/%d/Account/%s/Character/%s/Stats/Activities/?mode=4&count=250&page=%d", membershipType, membershipId, characterId, page)
+	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Account/%s/Character/%s/Stats/Activities/?mode=4&count=250&page=%d", getBungieURL(), membershipType, membershipId, characterId, page)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return []DestinyHistoricalStatsPeriodGroup{}, err

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -51,7 +52,7 @@ func main() {
 
 	// Download the ZIP file
 	zipFileName := dbFileName + ".zip"
-	resp, err := http.Get(dbURL)
+	resp, err := http.Get(fmt.Sprintf("%s?c=%d", dbURL, rand.Int()))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -107,7 +108,11 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		extractedFile.Close()
+		zipFile.Close()
 	}
+	zipReader.Close()
+	zipFile.Close()
 
 	log.Println("Downloaded sqlite3 successfully")
 
@@ -207,4 +212,5 @@ func main() {
 	}
 
 	log.Println("Done")
+
 }

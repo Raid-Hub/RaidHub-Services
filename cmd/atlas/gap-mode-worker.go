@@ -17,7 +17,6 @@ import (
 func gapModeWorker(wg *sync.WaitGroup, ch chan int64, foundChannel chan int64, db *sql.DB, channel *amqp.Channel) {
 	defer wg.Done()
 	securityKey := os.Getenv("BUNGIE_API_KEY")
-	proxy := os.Getenv("PGCR_URL_BASE")
 
 	client := &http.Client{}
 
@@ -29,7 +28,7 @@ func gapModeWorker(wg *sync.WaitGroup, ch chan int64, foundChannel chan int64, d
 		i := 0
 		for {
 			reqStartTime := time.Now()
-			result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceID, proxy, securityKey)
+			result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceID, securityKey)
 			if err != nil {
 				log.Println(err)
 			}

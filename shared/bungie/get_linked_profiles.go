@@ -20,7 +20,7 @@ type LinkedProfiles struct {
 }
 
 func GetLinkedProfiles(membershipType int, membershipId string, getAllMemberships bool) ([]DestinyUserInfo, error) {
-	url := fmt.Sprintf("https://www.bungie.net/Platform/Destiny2/%d/Profile/%s/LinkedProfiles/?getAllMemberships=%t", membershipType, membershipId, getAllMemberships)
+	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Profile/%s/LinkedProfiles/?getAllMemberships=%t", getBungieURL(), membershipType, membershipId, getAllMemberships)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return []DestinyUserInfo{}, err
