@@ -4,9 +4,13 @@ import (
 	"log"
 	"raidhub/shared/async"
 	"raidhub/shared/async/activity_history"
-	"sync"
 
 	_ "github.com/lib/pq"
+)
+
+const (
+	membershipId = 4611686018488107374
+	membershipType = 3
 )
 
 func main() {
@@ -23,9 +27,7 @@ func main() {
 	}
 	defer rabbitChannel.Close()
 
-	var wg sync.WaitGroup
-	activity_history.SendMessage(rabbitChannel, 3, 4611686018488107374)
-
-	wg.Wait()
+	activity_history.SendMessage(rabbitChannel, membershipType, membershipId)
+	
 	log.Println("Queued all players for crawl and activity history. Make sure to run bin/hermes")
 }
