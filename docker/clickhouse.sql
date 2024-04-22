@@ -1,20 +1,3 @@
-
-CREATE TABLE player (
-    membership_id                   Int64,
-    membership_type                 UInt16,
-    icon_path                       String,
-    display_name                    String,
-    bungie_global_display_name      String,
-    bungie_global_display_name_code String,
-    bungie_name                     String,
-    last_seen                       DateTime,
-    sherpas                         UInt32,
-    sum_of_best                     Int32,
-
-    PRIMARY KEY (membership_id)
-) ENGINE = ReplacingMergeTree()
-ORDER BY (membership_id, last_seen);
-
 CREATE TABLE instance (
     instance_id     Int64,
     hash            UInt32,
@@ -32,7 +15,7 @@ CREATE TABLE instance (
 ) ENGINE = ReplacingMergeTree()
 ORDER BY (instance_id);
 
-CREATE TABLE instance_player (
+CREATE TABLE player (
     instance_id          Int64,
     membership_id        Int64,
     completed            UInt8,
@@ -44,7 +27,7 @@ CREATE TABLE instance_player (
 ) ENGINE = ReplacingMergeTree()
 ORDER BY (instance_id, membership_id);
 
-CREATE TABLE instance_character (
+CREATE TABLE character (
     instance_id          Int64,
     membership_id        Int64,
     character_id         Int64,
@@ -66,7 +49,7 @@ CREATE TABLE instance_character (
 ) ENGINE = ReplacingMergeTree()
 ORDER BY (instance_id, membership_id, character_id);
 
-CREATE TABLE instance_character_weapon (
+CREATE TABLE weapon (
     instance_id     Int64,
     membership_id   Int64,
     character_id    Int64,
@@ -77,38 +60,4 @@ CREATE TABLE instance_character_weapon (
     PRIMARY KEY (instance_id, membership_id, character_id, weapon_hash)
 ) ENGINE = ReplacingMergeTree()
 ORDER BY (instance_id, membership_id, character_id, weapon_hash);
-
-CREATE TABLE weapon_definition (
-    hash         UInt32,
-    name         String,
-    icon_path    String,
-
-    PRIMARY KEY (hash)
-) ENGINE = ReplacingMergeTree();
-
-CREATE TABLE activity_definition (
-    id          Int32,
-    name        String,
-    is_sunset   UInt8,
-    is_raid     UInt8,
-
-    PRIMARY KEY (id)
-) ENGINE = ReplacingMergeTree()
-ORDER BY id;
-
-CREATE TABLE version_definition (
-    id    UInt8,
-    name  String,
-
-    PRIMARY KEY (id)
-) ENGINE = ReplacingMergeTree()
-ORDER BY id;
-
-CREATE TABLE activity (
-    hash         UInt32,
-    activity_id  UInt8,
-    version_id   UInt8,
-
-    PRIMARY KEY (hash)
-) ENGINE = ReplacingMergeTree()
 

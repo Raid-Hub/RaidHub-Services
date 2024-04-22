@@ -3,8 +3,11 @@ default: bin
 # Docker Services
 DOCKER_COMPOSE = docker-compose -f docker-compose.yml --env-file ./.env
 
-up services:
-	$(DOCKER_COMPOSE) up -d postgres rabbitmq
+services:
+	$(DOCKER_COMPOSE) up -d 
+
+up:
+	$(DOCKER_COMPOSE) up -d postgres rabbitmq clickhouse
 
 down:
 	$(DOCKER_COMPOSE) down
@@ -15,13 +18,13 @@ postgres:
 
 rabbit:
 	$(DOCKER_COMPOSE) up -d rabbitmq
+	
+clickhouse:
+	$(DOCKER_COMPOSE) up -d clickhouse
 
 ## Optional services
 prometheus:
 	$(DOCKER_COMPOSE) up -d prometheus
-	
-clickhouse:
-	$(DOCKER_COMPOSE) up -d clickhouse
 
 
 # Go Binaries

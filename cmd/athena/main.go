@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"raidhub/shared/bungie"
-	"raidhub/shared/clickhouse"
 	"raidhub/shared/postgres"
 
 	"github.com/joho/godotenv"
@@ -139,12 +138,6 @@ func main() {
 	}
 	defer db.Close()
 
-	c, err := clickhouse.Connect(true)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer c.Close()
-
 	rows, err := definitions.Query("SELECT json_extract(json, '$.hash'), json_extract(json, '$.displayProperties.name'), json_extract(json, '$.displayProperties.icon') FROM DestinyInventoryItemDefinition WHERE json_extract(json, '$.itemType') = 3")
 	if err != nil {
 		log.Fatal(err)
@@ -163,17 +156,6 @@ func main() {
 	}
 	defer stmt.Close()
 
-	chtx, err := c.Begin()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer chtx.Rollback()
-
-	chstmt, err := c.PrepareWeaponDefinition(chtx)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	log.Println("Statement prepared")
 
 	_, err = tx.Exec("DELETE FROM weapon_definition")
@@ -183,27 +165,13 @@ func main() {
 
 	// Iterate over the rows and process the data
 	for rows.Next() {
-		var def = clickhouse.WeaponDefinition{}
-		if err := rows.Scan(&def.Hash, &def.Name, &def.IconPath); err != nil {
+		var hash uint32
+		var name, iconPath string
+		if err := rows.Scan(&hash, &name, &iconPath); err != nil {
 			log.Fatal(err)
 		}
 
-		_, err := stmt.Exec(def.Hash, def.Name, def.IconPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		_, err = chstmt.Exec(&def)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		log.Printf("Inserted %d: %s", def.Hash, def.Name)
-	}
-
-	err = chtx.Commit()
-	if err != nil {
-		log.Fatal(err)
+		log.Printf("Inserted %d: %s", hash, name)
 	}
 
 	err = tx.Commit()

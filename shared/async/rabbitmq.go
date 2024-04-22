@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"raidhub/shared/clickhouse"
 	"sync"
 
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/joho/godotenv"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -55,7 +55,7 @@ type QueueWorker struct {
 	QueueName  string
 	Conn       *amqp.Connection
 	Db         *sql.DB
-	Clickhouse *clickhouse.ClickhouseClient
+	Clickhouse *driver.Conn
 	Processer  func(qw *QueueWorker, msgs <-chan amqp.Delivery)
 }
 

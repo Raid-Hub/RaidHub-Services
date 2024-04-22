@@ -34,7 +34,7 @@ func Worker(wg *sync.WaitGroup, ch chan int64, failuresChannel chan int64, offlo
 		for {
 			reqStartTime := time.Now()
 			result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceID, securityKey)
-			if err != nil {
+			if err != nil && result != pgcr.NotFound {
 				log.Println(err)
 			}
 

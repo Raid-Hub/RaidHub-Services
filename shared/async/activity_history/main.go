@@ -10,8 +10,7 @@ import (
 )
 
 type ActivityHistoryRequest struct {
-	MembershipId   string `json:"membershipId"`
-	MembershipType int    `json:"membershipType"`
+	MembershipId string `json:"membershipId"`
 }
 
 const queueName = "activity_history"
@@ -23,10 +22,9 @@ func Create() async.QueueWorker {
 	}
 }
 
-func SendMessage(ch *amqp.Channel, membershipType int, membershipId int64) error {
+func SendMessage(ch *amqp.Channel, membershipId int64) error {
 	body, err := json.Marshal(ActivityHistoryRequest{
-		MembershipId:   strconv.FormatInt(membershipId, 10),
-		MembershipType: membershipType,
+		MembershipId: strconv.FormatInt(membershipId, 10),
 	})
 	if err != nil {
 		return err

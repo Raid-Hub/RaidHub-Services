@@ -49,8 +49,8 @@ func main() {
 	pgcrsClickhouseQueue := pgcr.CreateClickhouseQueue()
 	pgcrsClickhouseQueue.Db = db
 	pgcrsClickhouseQueue.Conn = conn
-	pgcrsClickhouseQueue.Clickhouse = chClient
-	go pgcrsClickhouseQueue.Register(5)
+	pgcrsClickhouseQueue.Clickhouse = &chClient
+	go pgcrsClickhouseQueue.Register(1)
 
 	bonusPgcrsFetchQueue := bonus_pgcr.CreateFetchWorker()
 	bonusPgcrsFetchQueue.Db = db

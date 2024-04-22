@@ -38,6 +38,14 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 		return nil, false, err
 	}
 
+	// Send to clickhouse
+	err = SendToClickhouse(channel, pgcr)
+	if err != nil {
+		log.Println("Failed to send to clickhouse")
+		return nil, false, err
+
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		log.Println("Failed to initiate transaction")
@@ -344,7 +352,6 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 
 	}
 
-	err = SendToClickhouse(channel, pgcr)
 	if err != nil {
 		log.Fatal(err)
 		return nil, false, err

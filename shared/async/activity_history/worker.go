@@ -46,8 +46,22 @@ func process_request(msg *amqp.Delivery) {
 		return
 	}
 
-	log.Println(request.MembershipType, request.MembershipId)
-	stats, err := bungie.GetHistoricalStats(request.MembershipType, request.MembershipId)
+	profiles, err := bungie.GetLinkedProfiles(-1, request.MembershipId, false)
+
+	var membershipType int
+	for _, profile := range profiles {
+		if profile.MembershipId == request.MembershipId {
+			membershipType = profile.MembershipType
+			break
+		}
+	}
+
+	if membershipType == 0 {
+		log.Printf("Failed to find membership type for %s", request.MembershipId)
+		return
+	}
+
+	stats, err := bungie.GetHistoricalStats(membershipType, request.MembershipId)
 	if err != nil {
 		log.Printf("Failed to get stats: %s", err)
 	}
@@ -64,7 +78,7 @@ func process_request(msg *amqp.Delivery) {
 	}()
 
 	for _, character := range stats.Characters {
-		bungie.GetActivityHistory(request.MembershipType, request.MembershipId, character.CharacterId, out)
+		bungie.GetActivityHistory(membershipType, request.MembershipId, character.CharacterId, out)
 	}
 
 	close(out)
