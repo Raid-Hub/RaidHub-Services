@@ -3,55 +3,40 @@ package bonus_pgcr
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"raidhub/shared/async"
-	"raidhub/shared/discord"
 	"raidhub/shared/pgcr"
 	"strconv"
-	"sync"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-var (
-	outgoing *amqp.Channel
-	once     sync.Once
-)
-
-func create_outbound_channel() {
-	once.Do(func() {
-		conn, err := async.Init()
-		if err != nil {
-			log.Fatalf("Failed to create outbound channel: %s", err)
-		}
-		outgoing, _ = conn.Channel()
-	})
+type PGCRFetchRequest struct {
+	InstanceId string `json:"instanceId"`
 }
 
-func process_queue(msgs <-chan amqp.Delivery, db *sql.DB) {
+func process_fetch_queue(qw *async.QueueWorker, msgs <-chan amqp.Delivery) {
 	client := &http.Client{}
 	apiKey := os.Getenv("BUNGIE_API_KEY")
-	baseUrl := os.Getenv("PGCR_URL_BASE")
 
-	create_outbound_channel()
+	create_outbound_channel(qw.Conn)
 	for msg := range msgs {
-		process_request(&msg, db, client, baseUrl, apiKey)
+		process_fetch_request(&msg, qw.Db, client, apiKey)
 	}
 }
 
-func process_request(msg *amqp.Delivery, db *sql.DB, client *http.Client, baseUrl string, apiKey string) {
+func process_fetch_request(msg *amqp.Delivery, db *sql.DB, client *http.Client, apiKey string) {
 	defer func() {
 		if err := msg.Ack(false); err != nil {
 			log.Printf("Failed to acknowledge message: %v", err)
 		}
 	}()
 
-	var request PGCRRequest
+	var request PGCRFetchRequest
 	if err := json.Unmarshal(msg.Body, &request); err != nil {
-		log.Printf("Failed to unmarshal message: %s", err)
+		log.Fatalf("Failed to unmarshal message: %s", err)
 		return
 	}
 
@@ -68,20 +53,21 @@ func process_request(msg *amqp.Delivery, db *sql.DB, client *http.Client, baseUr
 			log.Printf("Error parsing instance_id %s: %s", request.InstanceId, err)
 			return
 		}
-		result, _ := pgcr.FetchAndStorePGCR(client, instanceIdInt, db, outgoing, baseUrl, apiKey)
-		if result == pgcr.Success {
-			// todo: track new pgcrs
-			log.Printf("%s added to data set", request.InstanceId)
 
-			msg := fmt.Sprintf("Found missing PGCR: %d", instanceIdInt)
-			webhook := discord.Webhook{
-				Content: &msg,
-			}
-			discord.SendWebhook(os.Getenv("PAN_WEBHOOK_URL"), &webhook)
-		} else if result == pgcr.AlreadyExists {
-			log.Printf("%s is already added: %d", request.InstanceId, result)
+		result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceIdInt, apiKey)
+
+		if err != nil {
+			log.Printf("Error fetching instanceId %d: %s", instanceIdInt, err)
+			pgcr.WriteMissedLog(instanceIdInt)
+			return
+		}
+
+		if result == pgcr.Success {
+			sendStoreMessage(outgoing, activity, raw)
+		} else if result == pgcr.NonRaid {
+			log.Printf("%s is not a raid", request.InstanceId)
 		} else {
-			log.Printf("%s returned an error result: %d", request.InstanceId, result)
+			log.Printf("%s returned a nil error result: %d", request.InstanceId, result)
 			pgcr.WriteMissedLog(instanceIdInt)
 		}
 	}

@@ -1,7 +1,6 @@
 package activity_history
 
 import (
-	"database/sql"
 	"encoding/json"
 	"log"
 	"raidhub/shared/async"
@@ -27,8 +26,7 @@ func create_outbound_channel() {
 	})
 }
 
-func process_queue(msgs <-chan amqp.Delivery, db *sql.DB) {
-	db.Close() // Not needed
+func process_queue(qw *async.QueueWorker, msgs <-chan amqp.Delivery) {
 	create_outbound_channel()
 	for msg := range msgs {
 		process_request(&msg)
@@ -44,12 +42,26 @@ func process_request(msg *amqp.Delivery) {
 
 	var request ActivityHistoryRequest
 	if err := json.Unmarshal(msg.Body, &request); err != nil {
-		log.Printf("Failed to unmarshal message: %s", err)
+		log.Fatalf("Failed to unmarshal message: %s", err)
 		return
 	}
 
-	log.Println(request.MembershipType, request.MembershipId)
-	stats, err := bungie.GetHistoricalStats(request.MembershipType, request.MembershipId)
+	profiles, err := bungie.GetLinkedProfiles(-1, request.MembershipId, false)
+
+	var membershipType int
+	for _, profile := range profiles {
+		if profile.MembershipId == request.MembershipId {
+			membershipType = profile.MembershipType
+			break
+		}
+	}
+
+	if membershipType == 0 {
+		log.Printf("Failed to find membership type for %s", request.MembershipId)
+		return
+	}
+
+	stats, err := bungie.GetHistoricalStats(membershipType, request.MembershipId)
 	if err != nil {
 		log.Printf("Failed to get stats: %s", err)
 	}
@@ -60,13 +72,13 @@ func process_request(msg *amqp.Delivery) {
 	wg.Add(1)
 	go func() {
 		for instanceId := range out {
-			bonus_pgcr.SendBonusPGCRMessage(outgoing, instanceId)
+			bonus_pgcr.SendFetchMessage(outgoing, instanceId)
 		}
 		wg.Done()
 	}()
 
 	for _, character := range stats.Characters {
-		bungie.GetActivityHistory(request.MembershipType, request.MembershipId, character.CharacterId, out)
+		bungie.GetActivityHistory(membershipType, request.MembershipId, character.CharacterId, out)
 	}
 
 	close(out)

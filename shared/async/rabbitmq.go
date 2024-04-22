@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"raidhub/shared/postgres"
 	"sync"
 
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/joho/godotenv"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -51,29 +51,24 @@ func Cleanup() {
 	}
 }
 
-func RegisterQueueWorker(queueName string, numWorkers int, worker func(msgs <-chan amqp.Delivery, db *sql.DB)) {
-	conn, err := Init()
-	if err != nil {
-		log.Fatalf("Failed to establish connection: %s", err)
-	}
-	defer Cleanup()
+type QueueWorker struct {
+	QueueName  string
+	Conn       *amqp.Connection
+	Db         *sql.DB
+	Clickhouse *driver.Conn
+	Processer  func(qw *QueueWorker, msgs <-chan amqp.Delivery)
+}
 
-	ch, err := conn.Channel()
+func (qw *QueueWorker) Register(numWorkers int) {
+	ch, err := qw.Conn.Channel()
 	if err != nil {
 		log.Fatalf("Failed to create channel: %s", err)
 	}
 	defer ch.Close()
 
-	// Set up PostgreSQL connection
-	db, err := postgres.Connect()
-	if err != nil {
-		log.Fatalf("Error connecting to the database: %s", err)
-	}
-	defer db.Close()
-
 	q, err := ch.QueueDeclare(
-		queueName,
-		false,
+		qw.QueueName,
+		true,
 		false,
 		false,
 		false,
@@ -97,19 +92,10 @@ func RegisterQueueWorker(queueName string, numWorkers int, worker func(msgs <-ch
 	}
 
 	for i := 0; i < numWorkers; i++ {
-		go worker(msgs, db)
+		go qw.Processer(qw, msgs)
 	}
 
-	log.Printf("Waiting for messages on queue %s...", queueName)
+	log.Printf("Waiting for messages on queue %s...", qw.QueueName)
 	forever := make(chan bool)
 	<-forever
 }
-
-// // Open a channel
-// ch, err = conn.Channel()
-// if err != nil {
-// 	conn.Close()
-// 	return nil, nil, err
-// }
-
-// return conn, ch, nil

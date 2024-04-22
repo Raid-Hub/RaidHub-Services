@@ -3,9 +3,7 @@
 prometheus.yml
 
 # Volumes
-raidhub-postgres
-prometheus-data
-rabbitmq-data
+volumes/
 
 # Binaries
 bin/
@@ -18,3 +16,6 @@ bin/
 
 # tmp
 cmd/tmp
+
+# defs
+*.sqlite3

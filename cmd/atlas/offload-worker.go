@@ -14,7 +14,6 @@ import (
 
 func offloadWorker(ch chan int64, failuresChannel chan int64, rabbitChannel *amqp.Channel, db *sql.DB) {
 	securityKey := os.Getenv("BUNGIE_API_KEY")
-	proxy := os.Getenv("PGCR_URL_BASE")
 
 	client := &http.Client{}
 
@@ -24,14 +23,26 @@ func offloadWorker(ch chan int64, failuresChannel chan int64, rabbitChannel *amq
 			log.Printf("Offloading instanceId %d", instanceId)
 			startTime := time.Now()
 			for i := 1; i <= 5; i++ {
-				result, lag := pgcr.FetchAndStorePGCR(client, instanceId, db, rabbitChannel, proxy, securityKey)
+				result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceId, securityKey)
 
-				if result == pgcr.AlreadyExists || result == pgcr.NonRaid {
+				if err != nil {
+					log.Println(err)
+				}
+
+				if result == pgcr.NonRaid {
+					log.Printf("[Offload Worker] Found non-raid raid with instanceId %d", instanceId)
 					return
 				} else if result == pgcr.Success {
+					lag, committed, err := pgcr.StorePGCR(activity, raw, db, rabbitChannel)
 					endTime := time.Now()
-					log.Printf("[Offload Worker] Added PGCR with instanceId %d (%d, %.0f, %.0f)", instanceId, i, endTime.Sub(startTime).Seconds(), lag.Seconds())
-					return
+					if err != nil {
+						log.Println(err)
+					} else if committed {
+						log.Printf("[Offload Worker] Added PGCR with instanceId %d (%d, %.0f, %.0f)", instanceId, i, endTime.Sub(startTime).Seconds(), lag.Seconds())
+						return
+					} else {
+						log.Printf("[Offload Worker] Found duplicate raid with instanceId %d (%d, %.0f, %.0f)", instanceId, i, endTime.Sub(startTime).Seconds(), lag.Seconds())
+					}
 				} else if result == pgcr.SystemDisabled {
 					i--
 					time.Sleep(60 * time.Second)

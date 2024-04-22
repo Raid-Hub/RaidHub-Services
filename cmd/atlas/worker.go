@@ -20,7 +20,6 @@ func Worker(wg *sync.WaitGroup, ch chan int64, failuresChannel chan int64, offlo
 	defer wg.Done()
 
 	securityKey := os.Getenv("BUNGIE_API_KEY")
-	proxy := os.Getenv("PGCR_URL_BASE")
 
 	client := &http.Client{}
 
@@ -31,37 +30,51 @@ func Worker(wg *sync.WaitGroup, ch chan int64, failuresChannel chan int64, offlo
 		notFoundCount := 0
 		errCount := 0
 		i := 0
-		var result pgcr.PGCRResult
-		var lag *time.Duration
-		var reqTime time.Duration
 
-		var statusStr string
-		var attemptsStr string
 		for {
 			reqStartTime := time.Now()
-			result, lag = pgcr.FetchAndStorePGCR(client, instanceID, db, rabbitChannel, proxy, securityKey)
+			result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceID, securityKey)
+			if err != nil && result != pgcr.NotFound {
+				log.Println(err)
+			}
 
-			statusStr = fmt.Sprintf("%d", result)
-			attemptsStr = fmt.Sprintf("%d", i+1)
+			statusStr := fmt.Sprintf("%d", result)
+			attemptsStr := fmt.Sprintf("%d", i+1)
 
 			monitoring.PGCRCrawlStatus.WithLabelValues(statusStr, attemptsStr).Inc()
-			if lag != nil {
-				monitoring.PGCRCrawlLag.WithLabelValues(statusStr, attemptsStr).Observe(float64(lag.Seconds()))
-			}
 
 			// Handle the result
-			if result == pgcr.AlreadyExists || result == pgcr.NonRaid {
+			if result == pgcr.NonRaid {
+				startDate, err := time.Parse(time.RFC3339, raw.Period)
+				if err != nil {
+					log.Fatal(err)
+				}
+				endDate := pgcr.CalculateDateCompleted(startDate, raw.Entries[0])
+
+				lag := time.Since(endDate)
+				monitoring.PGCRCrawlLag.WithLabelValues(statusStr, attemptsStr).Observe(float64(lag.Seconds()))
 				break
-			}
-			if result == pgcr.Success {
-				endTime := time.Now()
-				workerTime := endTime.Sub(startTime).Milliseconds()
-				reqTime = endTime.Sub(reqStartTime)
-				log.Printf("Added PGCR with instanceId %d (%d / %d / %d / %.0f)", instanceID, i, workerTime, reqTime.Milliseconds(), lag.Seconds())
-				break
+			} else if result == pgcr.Success {
+				lag, committed, err := pgcr.StorePGCR(activity, raw, db, rabbitChannel)
+				if lag != nil {
+					monitoring.PGCRCrawlLag.WithLabelValues(statusStr, attemptsStr).Observe(float64(lag.Seconds()))
+				}
+				if err != nil {
+					errCount++
+					log.Println(err)
+					time.Sleep(5 * time.Second)
+				} else {
+					if committed {
+						endTime := time.Now()
+						workerTime := endTime.Sub(startTime).Milliseconds()
+						reqTime := endTime.Sub(reqStartTime)
+						log.Printf("Added PGCR with instanceId %d (%d / %d / %d / %.0f)", instanceID, i, workerTime, reqTime.Milliseconds(), lag.Seconds())
+					}
+					break
+				}
 			} else if result == pgcr.InternalError {
 				errCount++
-				time.Sleep(3 * time.Second)
+				time.Sleep(10 * time.Second)
 			} else if result == pgcr.NotFound {
 				notFoundCount++
 			} else if result == pgcr.SystemDisabled {
@@ -71,7 +84,8 @@ func Worker(wg *sync.WaitGroup, ch chan int64, failuresChannel chan int64, offlo
 			} else if result == pgcr.InsufficientPrivileges {
 				failuresChannel <- instanceID
 				logMissedInstance(instanceID, startTime, false)
-				logInsufficentPrivileges(instanceID, startTime)
+				logInsufficentPrivileges(instanceID)
+				pgcr.WriteMissedLog(instanceID)
 				break
 			} else if result == pgcr.BadFormat {
 				pgcr.WriteMissedLog(instanceID)

@@ -136,9 +136,11 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 	close(ids)
 	wg.Wait()
 
-	medianLag, err := execQuery(`histogram_quantile(0.50, sum(rate(pgcr_crawl_summary_lag_bucket[2m])) by (le))`, 3)
+	medianLag, err := execQuery(`histogram_quantile(0.20, sum(rate(pgcr_crawl_summary_lag_bucket[2m])) by (le))`, 3)
 	if err != nil {
 		log.Fatal(err)
+	} else if medianLag == -1 {
+		medianLag = 900
 	}
 
 	fractionNotFound, err := get404Fraction(4)
@@ -238,6 +240,11 @@ func execQuery(query string, intervalMins int) (float64, error) {
 	// Creates a weighted average over the interval
 	c := 0
 	s := 0.0
+
+	if len(res.Data.Result) == 0 {
+		return -1, nil
+	}
+
 	for idx, y := range res.Data.Result[0].Values {
 		val, err := strconv.ParseFloat(y[1].(string), 64)
 		if err != nil {

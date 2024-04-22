@@ -3,6 +3,7 @@ package pgcr
 import (
 	"database/sql"
 	"log"
+	"raidhub/shared/async/character_fill"
 	"raidhub/shared/async/player_crawl"
 	"raidhub/shared/bungie"
 	"raidhub/shared/postgres"
@@ -35,6 +36,14 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 	if err != nil {
 		log.Println("Failed to store raw JSON")
 		return nil, false, err
+	}
+
+	// Send to clickhouse
+	err = SendToClickhouse(channel, pgcr)
+	if err != nil {
+		log.Println("Failed to send to clickhouse")
+		return nil, false, err
+
 	}
 
 	tx, err := db.Begin()
@@ -75,7 +84,7 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 
 	completedDictionary := map[int64]bool{}
 	fastestClearSoFar := map[int64]int{}
-	for _, playerActivity := range pgcr.PlayerActivities {
+	for _, playerActivity := range pgcr.Players {
 		var playerRaidClearCount int
 		var duration int
 		// the sum is a null hack, but it finds distinct rows anyways
@@ -83,8 +92,7 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 			SELECT COALESCE(SUM(ps.clears), 0) AS count, COALESCE(SUM(a.duration), 100000000)
 			FROM player_stats ps
 			LEFT JOIN activity a ON ps.fastest_instance_id = a.instance_id
-			WHERE ps.membership_id = $1 AND ps.activity_id = $2`,
-			playerActivity.Player.MembershipId, activityId).
+			WHERE ps.membership_id = $1 AND ps.activity_id = $2`, playerActivity.Player.MembershipId, activityId).
 			Scan(&playerRaidClearCount, &duration)
 		fastestClearSoFar[playerActivity.Player.MembershipId] = duration
 
@@ -132,7 +140,7 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 
 		// Send a crawl request if needed
 		if playerActivity.Player.MembershipType == nil || *playerActivity.Player.MembershipType == 0 {
-			err = player_crawl.SendPlayerCrawlMessage(channel, playerActivity.Player.MembershipId)
+			err = player_crawl.SendMessage(channel, playerActivity.Player.MembershipId)
 			if err != nil {
 				log.Fatalf("Failed to send player crawl request: %s", err)
 			}
@@ -198,31 +206,44 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 			for err := range errs {
 				return nil, false, err
 			}
+
+			if character.ClassHash == nil {
+				character_fill.SendMessage(channel, playerActivity.Player.MembershipId, character.CharacterId, pgcr.InstanceId)
+			}
 		}
 
 	}
 
 	// determine if a sherpa took place
-	noobs := 0
+	noobsCount := 0
 	anyPro := false
 	for _, hasClears := range completedDictionary {
 		if hasClears {
 			anyPro = true
 		} else {
-			noobs++
+			noobsCount++
 		}
 	}
 
-	sherpasHappened := anyPro && noobs > 0
+	sherpasHappened := anyPro && noobsCount > 0
 	if sherpasHappened {
-		log.Printf("Found %d sherpas for instance %d", noobs, pgcr.InstanceId)
+		log.Printf("Found %d sherpas for instance %d", noobsCount, pgcr.InstanceId)
 	}
 
 	for membershipId, hasClears := range completedDictionary {
-		sherpaCount := 0
-		if hasClears && sherpasHappened {
-			sherpaCount = noobs
+		var playerActivity *ProcessedActivityPlayer
+		for _, pa := range pgcr.Players {
+			if pa.Player.MembershipId == membershipId {
+				playerActivity = &pa
+				break
+			}
+		}
+		if playerActivity == nil {
+			log.Fatalf("Player %d not found in pgcr.Players", membershipId)
+		}
 
+		if hasClears && sherpasHappened {
+			playerActivity.Sherpas = noobsCount
 			// set sherpas for p_activity
 			_, err = tx.Exec(`UPDATE 
 				activity_player
@@ -230,7 +251,7 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 				sherpas = $1
 			WHERE 
 				membership_id = $2 AND
-				instance_id = $3`, sherpaCount, membershipId, pgcr.InstanceId)
+				instance_id = $3`, playerActivity.Sherpas, membershipId, pgcr.InstanceId)
 
 			if err != nil {
 				log.Printf("Error updating sherpa count for activity_player with instanceId, membershipId %d, %d", pgcr.InstanceId, membershipId)
@@ -238,6 +259,7 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 			}
 
 		} else if !hasClears {
+			playerActivity.IsFirstClear = true
 			// first clear, update p_activity
 			_, err = tx.Exec(`UPDATE 
 				activity_player
@@ -281,7 +303,7 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 			WHERE
 				membership_id = $1 AND
 				activity_id = $2;
-			`, membershipId, activityId, sherpaCount, pgcr.Fresh, pgcr.PlayerCount, pgcr.DurationSeconds, fastestClearSoFar[membershipId], pgcr.InstanceId)
+			`, membershipId, activityId, playerActivity.Sherpas, pgcr.Fresh, pgcr.PlayerCount, pgcr.DurationSeconds, fastestClearSoFar[membershipId], pgcr.InstanceId)
 
 		if err != nil {
 			log.Printf("Error updating player_stats for membershipId %d", membershipId)
@@ -297,7 +319,7 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 						WHEN $3 = true THEN player.fresh_clears + 1
 						ELSE player.fresh_clears
 					END
-			WHERE membership_id = $1`, membershipId, sherpaCount, pgcr.Fresh)
+			WHERE membership_id = $1`, membershipId, playerActivity.Sherpas, pgcr.Fresh)
 
 		if err != nil {
 			log.Printf("Error updating global stats for membershipId %d", membershipId)
@@ -330,10 +352,16 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 
 	}
 
+	if err != nil {
+		log.Fatal(err)
+		return nil, false, err
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		log.Fatal(err)
 		return nil, false, err
 	}
+
 	return &lag, true, nil
 }

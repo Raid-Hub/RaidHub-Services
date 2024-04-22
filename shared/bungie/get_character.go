@@ -8,23 +8,23 @@ import (
 	"time"
 )
 
-type HistoricalStatsResponse struct {
-	Response        DestinyHistoricalStatsAccountResult `json:"Response"`
-	ErrorCode       int                                 `json:"ErrorCode"`
-	ErrorStatus     string                              `json:"ErrorStatus"`
-	ThrottleSeconds int                                 `json:"ThrottleSeconds"`
+type GetCharacterResponse struct {
+	Response        DestinyCharacterResponse `json:"Response"`
+	ErrorCode       int                      `json:"ErrorCode"`
+	ErrorStatus     string                   `json:"ErrorStatus"`
+	ThrottleSeconds int                      `json:"ThrottleSeconds"`
 }
 
-type DestinyHistoricalStatsAccountResult struct {
-	Characters []DestinyHistoricalStatsPerCharacter `json:"characters"`
+type DestinyCharacterResponse struct {
+	Character *SingleComponentResponseOfDestinyCharacterComponent `json:"character"`
 }
 
-type DestinyHistoricalStatsPerCharacter struct {
-	CharacterId string `json:"characterId"`
+type SingleComponentResponseOfDestinyCharacterComponent struct {
+	Data *DestinyCharacterComponent `json:"data"`
 }
 
-func GetHistoricalStats(membershipType int, membershipId string) (*DestinyHistoricalStatsAccountResult, error) {
-	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Account/%s/Stats/", getBungieURL(), membershipType, membershipId)
+func GetCharacter(membershipType int32, membershipId string, characterId string) (*DestinyCharacterResponse, error) {
+	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Profile/%s/Character/%s/?components=200", getBungieURL(), membershipType, membershipId, characterId)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func GetHistoricalStats(membershipType int, membershipId string) (*DestinyHistor
 		return nil, fmt.Errorf("error response: %s (%d)", data.Message, data.ErrorCode)
 	}
 
-	var data HistoricalStatsResponse
+	var data GetCharacterResponse
 	if err := decoder.Decode(&data); err != nil {
 		return nil, err
 	}

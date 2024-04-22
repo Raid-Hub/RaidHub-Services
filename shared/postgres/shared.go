@@ -6,13 +6,13 @@ import (
 )
 
 type Player struct {
-	MembershipId                int64
-	MembershipType              *int
-	LastSeen                    time.Time
-	IconPath                    *string
-	DisplayName                 *string
-	BungieGlobalDisplayName     *string
-	BungieGlobalDisplayNameCode *string
+	MembershipId                int64     `json:"membershipId"`
+	MembershipType              *int      `json:"membershipType"`
+	LastSeen                    time.Time `json:"lastSeen"`
+	IconPath                    *string   `json:"iconPath"`
+	DisplayName                 *string   `json:"displayName"`
+	BungieGlobalDisplayName     *string   `json:"bungieGlobalDisplayName"`
+	BungieGlobalDisplayNameCode *string   `json:"bungieGlobalDisplayNameCode"`
 }
 
 func UpsertPlayer(tx *sql.Tx, player *Player) (sql.Result, error) {

@@ -1,0 +1,55 @@
+version: "3"
+name: raidhub
+
+services:
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: "raidhub"
+      POSTGRES_USER: "${POSTGRES_USER:-username}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-password}"
+    volumes:
+      - ./volumes/postgres:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready raidhub -U ${POSTGRES_USER:-username}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.8-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER:-guest}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD:-guest}"
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_UI_PORT:-15672}:15672"
+    volumes:
+      - ./volumes/rabbitmq:/var/lib/rabbitmq
+
+  clickhouse:
+    image: clickhouse/clickhouse-server
+    container_name: clickhouse
+    ports:
+      - "${CLICKHOUSE_PORT:-9000}:9000"
+      - "${CLICKHOUSE_HTTP_PORT:-8123}:8123"
+    environment:
+      CLICKHOUSE_USER: "${CLICKHOUSE_USER:-default}"
+      CLICKHOUSE_PASSWORD: "${CLICKHOUSE_PASSWORD:-}"
+    volumes:
+      - ./volumes/clickhouse:/var/lib/clickhouse
+      - ./docker/clickhouse.sql:/docker-entrypoint-initdb.d/init.sql
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./volumes/prometheus:/prometheus
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
