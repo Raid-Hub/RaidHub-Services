@@ -107,11 +107,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		extractedFile.Close()
-		zipFile.Close()
 	}
-	zipReader.Close()
-	zipFile.Close()
 
 	log.Println("Downloaded sqlite3 successfully")
 
@@ -166,8 +162,14 @@ func main() {
 	// Iterate over the rows and process the data
 	for rows.Next() {
 		var hash uint32
-		var name, iconPath string
-		if err := rows.Scan(&hash, &name, &iconPath); err != nil {
+		var name string
+		var icon string
+		if err := rows.Scan(&hash, &name, &icon); err != nil {
+			log.Fatal(err)
+		}
+
+		_, err := stmt.Exec(hash, name, icon)
+		if err != nil {
 			log.Fatal(err)
 		}
 
@@ -180,5 +182,4 @@ func main() {
 	}
 
 	log.Println("Done")
-
 }
