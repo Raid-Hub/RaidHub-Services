@@ -39,9 +39,11 @@ var (
 )
 
 type transport struct {
-	n       int64
+	nW      int64
+	nS      int64
 	rt      []http.RoundTripper
-	rl      []*rate.Limiter
+	statsRl []*rate.Limiter
+	wwwRl   []*rate.Limiter
 	apiKeys []string
 }
 
@@ -80,7 +82,8 @@ func main() {
 		if *printAddrs {
 			fmt.Printf("sudo ip -6 addr add %s/64 dev %s\n", addr.String(), *ipv6interface)
 		}
-		proxyTransport.rl = append(proxyTransport.rl, rate.NewLimiter(rate.Every(time.Second)*40, 65))
+		proxyTransport.statsRl = append(proxyTransport.statsRl, rate.NewLimiter(rate.Every(time.Second/50), 75))
+		proxyTransport.wwwRl = append(proxyTransport.wwwRl, rate.NewLimiter(rate.Every(time.Second/15), 30))
 		proxyTransport.rt = append(proxyTransport.rt, rt)
 		addr = addr.Next()
 	}
@@ -113,28 +116,32 @@ func main() {
 }
 
 func (t *transport) RoundTrip(r *http.Request) (*http.Response, error) {
-	n := atomic.AddInt64(&t.n, 1)
-	rt := t.rt[n%int64(len(t.rt))]
-	rl := t.rl[n%int64(len(t.rl))]
+	var rl *rate.Limiter
+	var n int64
+	if strings.Contains(r.URL.Path, "Destiny2/Stats/PostGameCarnageReport") {
+		n = atomic.AddInt64(&t.nS, 1)
+		r.Host = "stats.bungie.net"
+		rl = t.statsRl[n%int64(len(t.statsRl))]
+	} else {
+		n = atomic.AddInt64(&t.nW, 1)
+		r.Host = "www.bungie.net"
+		rl = t.wwwRl[n%int64(len(t.wwwRl))]
+	}
 	apiKey := t.apiKeys[n%int64(len(t.apiKeys))]
-	rl.Wait(r.Context())
 	if r.Header.Get("x-api-key") == securityKey {
 		if *verbose {
 			fmt.Printf("Security key provided: %s\n", r.Header.Get("x-api-key"))
 			fmt.Printf("Using API Key: %s\n", apiKey)
 		}
 		r.Header.Set("X-API-KEY", apiKey)
+		r.Header.Add("x-forwarded-for", apiKey)
 	}
-	r.Header.Add("x-forwarded-for", apiKey)
 	if *verbose {
 		fmt.Printf("Sending Request: %s\n", r.URL.String())
 		fmt.Printf("Request Headers: %s\n", r.Header)
 	}
-	if strings.Contains(r.URL.Path, "Destiny2/Stats/PostGameCarnageReport") {
-		r.Host = "stats.bungie.net"
-	} else {
-		r.Host = "www.bungie.net"
-	}
+	rt := t.rt[n%int64(len(t.rt))]
+	rl.Wait(r.Context())
 	return rt.RoundTrip(r)
 }
 

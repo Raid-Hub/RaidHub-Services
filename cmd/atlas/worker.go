@@ -16,7 +16,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func Worker(wg *sync.WaitGroup, ch chan int64, failuresChannel chan int64, offloadChannel chan int64, rabbitChannel *amqp.Channel, db *sql.DB) {
+func Worker(wg *sync.WaitGroup, ch chan int64, offloadChannel chan int64, rabbitChannel *amqp.Channel, db *sql.DB) {
 	defer wg.Done()
 
 	securityKey := os.Getenv("BUNGIE_API_KEY")
@@ -82,8 +82,7 @@ func Worker(wg *sync.WaitGroup, ch chan int64, failuresChannel chan int64, offlo
 				time.Sleep(45 * time.Second)
 				continue
 			} else if result == pgcr.InsufficientPrivileges {
-				failuresChannel <- instanceID
-				logMissedInstance(instanceID, startTime, false)
+				go logMissedInstance(instanceID, startTime)
 				logInsufficentPrivileges(instanceID)
 				pgcr.WriteMissedLog(instanceID)
 				break

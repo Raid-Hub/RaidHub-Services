@@ -19,8 +19,8 @@ type LinkedProfiles struct {
 	Profiles []DestinyUserInfo `json:"profiles"`
 }
 
-func GetLinkedProfiles(membershipType int, membershipId string, getAllMemberships bool) ([]DestinyUserInfo, error) {
-	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Profile/%s/LinkedProfiles/?getAllMemberships=%t", getBungieURL(), membershipType, membershipId, getAllMemberships)
+func GetLinkedProfiles(membershipType int, membershipId int64, getAllMemberships bool) ([]DestinyUserInfo, error) {
+	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Profile/%d/LinkedProfiles/?getAllMemberships=%t", getBungieURL(), membershipType, membershipId, getAllMemberships)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return []DestinyUserInfo{}, err

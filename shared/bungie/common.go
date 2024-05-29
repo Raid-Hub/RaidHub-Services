@@ -3,6 +3,7 @@ package bungie
 import (
 	"os"
 	"sync"
+	"time"
 )
 
 var (
@@ -20,14 +21,14 @@ type BungieError struct {
 type DestinyUserInfo struct {
 	IconPath                    *string `json:"iconPath"`
 	MembershipType              int     `json:"membershipType"`
-	MembershipId                string  `json:"membershipId"`
+	MembershipId                int64   `json:"membershipId,string"`
 	DisplayName                 *string `json:"displayName"`
 	BungieGlobalDisplayName     *string `json:"bungieGlobalDisplayName"`
 	BungieGlobalDisplayNameCode *int    `json:"bungieGlobalDisplayNameCode"`
 }
 
 type DestinyHistoricalStatsActivity struct {
-	InstanceId           string `json:"instanceId"`
+	InstanceId           int64  `json:"instanceId,string"`
 	Mode                 int    `json:"mode"`
 	Modes                []int  `json:"modes"`
 	MembershipType       int    `json:"membershipType"`
@@ -35,11 +36,11 @@ type DestinyHistoricalStatsActivity struct {
 }
 
 type DestinyCharacterComponent struct {
-	CharacterId    string `json:"characterId"`
-	EmblemPath     string `json:"emblemPath"`
-	EmblemHash     uint32 `json:"emblemHash"`
-	ClassHash      uint32 `json:"classHash"`
-	DateLastPlayed string `json:"dateLastPlayed"`
+	CharacterId    int64     `json:"characterId,string"`
+	EmblemPath     string    `json:"emblemPath"`
+	EmblemHash     uint32    `json:"emblemHash"`
+	ClassHash      uint32    `json:"classHash"`
+	DateLastPlayed time.Time `json:"dateLastPlayed,string"`
 }
 
 func getBungieURL() string {

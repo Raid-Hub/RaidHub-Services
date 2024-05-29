@@ -32,8 +32,8 @@ type DictionaryComponentResponseOfint64AndDestinyCharacterComponent struct {
 	Data *map[int64]DestinyCharacterComponent `json:"data"`
 }
 
-func GetProfile(membershipType int, membershipId string) (*DestinyProfileResponse, error) {
-	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Profile/%s/?components=100,200", getBungieURL(), membershipType, membershipId)
+func GetProfile(membershipType int, membershipId int64) (*DestinyProfileResponse, error) {
+	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Profile/%d/?components=100,200", getBungieURL(), membershipType, membershipId)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err

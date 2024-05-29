@@ -20,11 +20,11 @@ type DestinyHistoricalStatsAccountResult struct {
 }
 
 type DestinyHistoricalStatsPerCharacter struct {
-	CharacterId string `json:"characterId"`
+	CharacterId int64 `json:"characterId,string"`
 }
 
-func GetHistoricalStats(membershipType int, membershipId string) (*DestinyHistoricalStatsAccountResult, error) {
-	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Account/%s/Stats/", getBungieURL(), membershipType, membershipId)
+func GetHistoricalStats(membershipType int, membershipId int64) (*DestinyHistoricalStatsAccountResult, error) {
+	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Account/%d/Stats/", getBungieURL(), membershipType, membershipId)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err

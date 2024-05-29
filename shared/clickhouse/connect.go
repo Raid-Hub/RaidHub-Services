@@ -22,7 +22,12 @@ func Connect(debug bool) (driver.Conn, error) {
 	password := os.Getenv("CLICKHOUSE_PASSWORD")
 
 	return ch.Open(&ch.Options{
-		Debug: debug,
+		Settings: ch.Settings{
+			"flatten_nested": 0,
+		},
+		MaxOpenConns: 50,
+		MaxIdleConns: 40,
+		Debug:        debug,
 		Auth: ch.Auth{
 			Username: user,
 			Password: password,

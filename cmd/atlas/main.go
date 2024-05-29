@@ -15,9 +15,9 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"raidhub/shared/async"
 	"raidhub/shared/monitoring"
 	"raidhub/shared/postgres"
+	"raidhub/shared/rabbit"
 )
 
 var (
@@ -68,11 +68,11 @@ func run(latestId int64, db *sql.DB) {
 		}
 	}()
 
-	conn, err := async.Init()
+	conn, err := rabbit.Init()
 	if err != nil {
 		log.Fatalf("Failed to create connection: %s", err)
 	}
-	defer async.Cleanup()
+	defer rabbit.Cleanup()
 
 	rabbitChannel, err := conn.Channel()
 	if err != nil {
@@ -81,33 +81,18 @@ func run(latestId int64, db *sql.DB) {
 	defer rabbitChannel.Close()
 
 	consumerConfig := ConsumerConfig{
-		LatestId:        latestId,
-		GapMode:         false,
-		FailuresChannel: make(chan int64),
-		SuccessChannel:  make(chan int64),
-		OffloadChannel:  make(chan int64),
-		RabbitChannel:   rabbitChannel,
+		LatestId:       latestId,
+		OffloadChannel: make(chan int64),
+		RabbitChannel:  rabbitChannel,
 	}
 
 	sendStartUpAlert()
 
-	// Start a goroutine to consume failures from the channel
-	go consumeFailures(&consumerConfig)
-
-	// Start a goroutine to consume found PGCRs from the gap mode channel
-	go consumeSuccesses(&consumerConfig)
-
 	// Start a goroutine to offload malformed or slowly resolving PGCRs
-	go offloadWorker(consumerConfig.OffloadChannel, consumerConfig.FailuresChannel, consumerConfig.RabbitChannel, db)
+	go offloadWorker(consumerConfig.OffloadChannel, consumerConfig.RabbitChannel, db)
 
 	for {
-		if !consumerConfig.GapMode {
-			workers = spawnWorkers(workers, db, &consumerConfig)
-		} else {
-			spawnGapModeWorkers(db, &consumerConfig)
-			// When exiting gap mode, we should increase the number of workers to catch up
-			workers = maxWorkers
-		}
+		workers = spawnWorkers(workers, db, &consumerConfig)
 	}
 
 }
@@ -120,15 +105,11 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 
 	for i := 0; i < countWorkers; i++ {
 		wg.Add(1)
-		go Worker(&wg, ids, consumerConfig.FailuresChannel, consumerConfig.OffloadChannel, consumerConfig.RabbitChannel, db)
+		go Worker(&wg, ids, consumerConfig.OffloadChannel, consumerConfig.RabbitChannel, db)
 	}
 
 	// Pass IDs to workers
 	for i := 0; i < periodLength; i++ {
-		// If we are in gap mode is entered, we should stop passing IDs to workers
-		if consumerConfig.GapMode {
-			break
-		}
 		consumerConfig.LatestId++
 		ids <- consumerConfig.LatestId
 	}
@@ -153,12 +134,12 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 	newWorkers := 0
 	if fractionNotFound == 0 {
 		// how much we expect to get catch up
-		periodLength = countWorkers * (int(math.Ceil(medianLag)) - 30) / 6
+		periodLength = int(math.Round(math.Pow(float64(countWorkers)*(math.Ceil(medianLag)-20.0), 0.824)))
 		if periodLength < 10_000 {
 			periodLength = 10_000
 		}
 		// If we aren't getting 404's, just spike the workers up to ensure we catch up to live ASAP
-		newWorkers = int(math.Ceil(float64(countWorkers) * (1 + float64(medianLag-30)/100)))
+		newWorkers = int(math.Ceil(float64(countWorkers) * (1 + float64(medianLag-20)/100)))
 
 	} else {
 		adjf := fractionNotFound - 0.025 // do not let workers go below 2.5 %
@@ -180,34 +161,13 @@ func spawnWorkers(countWorkers int, db *sql.DB, consumerConfig *ConsumerConfig) 
 	return newWorkers
 }
 
-func spawnGapModeWorkers(db *sql.DB, consumerConfig *ConsumerConfig) {
-	var wg sync.WaitGroup
-	ids := make(chan int64, 25)
-
-	for i := 0; i < gapModeWorkers; i++ {
-		wg.Add(1)
-		go gapModeWorker(&wg, ids, consumerConfig.SuccessChannel, db, consumerConfig.RabbitChannel)
-	}
-
-	misses := 0
-	// Pass IDs to workers, but only if we are in gap mode
-	for {
-		if !consumerConfig.GapMode {
-			break
-		}
-		if misses > 100_000 {
-			gapModeFailureAlert()
-		}
-		consumerConfig.LatestId++
-		ids <- consumerConfig.LatestId
-	}
-
-	close(ids)
-	wg.Wait()
-}
-
 func get404Fraction(intervalMins int) (float64, error) {
-	return execQuery(fmt.Sprintf(`sum(rate(pgcr_crawl_summary_status{status="3"}[%dm])) / sum(rate(pgcr_crawl_summary_status{}[%dm]))`, intervalMins, intervalMins), intervalMins)
+	f, err := execQuery(fmt.Sprintf(`sum(rate(pgcr_crawl_summary_status{status="3"}[%dm])) / sum(rate(pgcr_crawl_summary_status{}[%dm]))`, intervalMins, intervalMins), intervalMins)
+	if err != nil || f == -1 {
+		return 0, err
+	} else {
+		return f, err
+	}
 }
 
 func execQuery(query string, intervalMins int) (float64, error) {

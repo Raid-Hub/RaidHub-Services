@@ -6,7 +6,6 @@ import (
 	"log"
 	"raidhub/shared/bungie"
 	"raidhub/shared/postgres"
-	"strconv"
 	"time"
 )
 
@@ -81,22 +80,13 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 		return nil, errors.New("malformed pgcr: no one had any duration_seconds")
 	}
 
-	instanceId, err := strconv.ParseInt(report.ActivityDetails.InstanceId, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-
 	completionReason := getStat(report.Entries[0].Values, "completionReason")
 
-	fresh, err := isFresh(report)
-	if err != nil {
-		return nil, err
-	}
-
 	result := ProcessedActivity{
-		InstanceId:      instanceId,
-		Hash:            report.ActivityDetails.DirectorActivityHash,
-		Fresh:           fresh,
+		InstanceId: report.ActivityDetails.InstanceId,
+		Hash:       report.ActivityDetails.DirectorActivityHash,
+		// assigned later
+		Fresh:           nil,
 		DateStarted:     startDate,
 		DateCompleted:   CalculateDateCompleted(startDate, report.Entries[0]),
 		DurationSeconds: CalculateDurationSeconds(startDate, report.Entries[0]),
@@ -104,7 +94,7 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 		Score:           getStat(report.Entries[0].Values, "teamScore"),
 	}
 
-	players := make(map[string][]bungie.DestinyPostGameCarnageReportEntry)
+	players := make(map[int64][]bungie.DestinyPostGameCarnageReportEntry)
 
 	for _, e := range report.Entries {
 		if val, ok := players[e.Player.DestinyUserInfo.MembershipId]; ok {
@@ -122,12 +112,8 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 		}
 
 		for _, entry := range entries {
-			characterId, err := strconv.ParseInt(entry.CharacterId, 10, 64)
-			if err != nil {
-				return nil, err
-			}
 			character := ProcessedActivityCharacter{
-				CharacterId: characterId,
+				CharacterId: entry.CharacterId,
 				Completed:   getStat(entry.Values, "completed") == 1,
 				Weapons:     []ProcessedCharacterActivityWeapon{},
 			}
@@ -170,16 +156,12 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 		processedPlayerActivity.TimePlayedSeconds = calculatePlayerTimePlayedSeconds(entries)
 
 		destinyUserInfo := entries[0].Player.DestinyUserInfo
-		membershipId, err := strconv.ParseInt(destinyUserInfo.MembershipId, 10, 64)
-		if err != nil {
-			return nil, err
-		}
 
 		processedPlayerActivity.Player.LastSeen = startDate.Add(time.Duration(
 			processedPlayerActivity.Characters[0].StartSeconds+
 				processedPlayerActivity.Characters[0].TimePlayedSeconds,
 		) * time.Second)
-		processedPlayerActivity.Player.MembershipId = membershipId
+		processedPlayerActivity.Player.MembershipId = destinyUserInfo.MembershipId
 		if destinyUserInfo.MembershipType != 0 {
 			processedPlayerActivity.Player.MembershipType = &destinyUserInfo.MembershipType
 			processedPlayerActivity.Player.IconPath = destinyUserInfo.IconPath
@@ -220,6 +202,12 @@ func ProcessDestinyReport(report *bungie.DestinyPostGameCarnageReport) (*Process
 			break
 		}
 	}
+
+	fresh, err := isFresh(report, deathless)
+	if err != nil {
+		return nil, err
+	}
+	result.Fresh = fresh
 
 	if result.Completed && deathless {
 		result.Flawless = fresh
@@ -293,38 +281,37 @@ var leviHashes = map[uint32]bool{
 }
 
 // isFresh checks if a DestinyPostGameCarnageReportData is considered fresh based on the period start time.
-func isFresh(pgcr *bungie.DestinyPostGameCarnageReport) (*bool, error) {
+func isFresh(pgcr *bungie.DestinyPostGameCarnageReport, deathless bool) (*bool, error) {
 	var result *bool = nil
 
 	start, err := time.Parse(time.RFC3339, pgcr.Period)
 	if err != nil {
-		log.Printf("Error parsing 'period' for %s: %s", pgcr.ActivityDetails.InstanceId, err)
+		log.Printf("Error parsing 'period' for %d: %s", pgcr.ActivityDetails.InstanceId, err)
 		return nil, err
 	}
 
 	startUnix := start.Unix()
 
-	if startUnix < witchQueenStart {
-		if startUnix < beyondLightStart {
-			result = new(bool)
-			if pgcr.ActivityDetails.DirectorActivityHash == 548750096 || pgcr.ActivityDetails.DirectorActivityHash == 2812525063 {
-				// sotp
-				*result = (pgcr.StartingPhaseIndex <= 1)
-			} else if leviHashes[pgcr.ActivityDetails.DirectorActivityHash] {
-				*result = (pgcr.StartingPhaseIndex == 0 || pgcr.StartingPhaseIndex == 2)
-			} else {
-				*result = (pgcr.StartingPhaseIndex == 0)
-			}
+	if startUnix >= hauntedStart {
+		// Current case, working as normal, using ActivityWasStartedFromBeginning
+		result = &pgcr.ActivityWasStartedFromBeginning
+	} else if startUnix < beyondLightStart {
+		// Pre beyond light, using StartingPhaseIndex
+		result = new(bool)
+		// sotp
+		if pgcr.ActivityDetails.DirectorActivityHash == 548750096 || pgcr.ActivityDetails.DirectorActivityHash == 2812525063 {
+			*result = (pgcr.StartingPhaseIndex <= 1)
+			// levi
+		} else if leviHashes[pgcr.ActivityDetails.DirectorActivityHash] {
+			*result = (pgcr.StartingPhaseIndex == 0 || pgcr.StartingPhaseIndex == 2)
+		} else {
+			*result = (pgcr.StartingPhaseIndex == 0)
 		}
-	} else {
-		if pgcr.ActivityWasStartedFromBeginning {
-			result = new(bool)
-			*result = true
-		} else if startUnix > hauntedStart {
-			result = new(bool)
-			*result = pgcr.ActivityWasStartedFromBeginning
-		}
+	} else if startUnix >= witchQueenStart && (pgcr.ActivityWasStartedFromBeginning || deathless) {
+		// WQ: ActivityWasStartedFromBeginning erroneously false when a wipe happens
+		result = &pgcr.ActivityWasStartedFromBeginning
 	}
+	// Beyond Light: ActivityWasStartedFromBeginning always false
 
 	return result, nil
 }

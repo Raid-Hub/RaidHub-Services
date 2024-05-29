@@ -3,10 +3,12 @@ package main
 import (
 	"log"
 	"os"
-	"raidhub/shared/async"
-	"raidhub/shared/async/activity_history"
-	"raidhub/shared/async/player_crawl"
+	"raidhub/async/activity_history"
+	"raidhub/async/player_crawl"
+	"raidhub/shared/postgres"
+	"raidhub/shared/rabbit"
 	"strconv"
+	"strings"
 	"sync"
 
 	_ "github.com/lib/pq"
@@ -16,12 +18,67 @@ func main() {
 	// Parse the ids
 	membershipIds := os.Args[1:]
 
+	data, err := os.ReadFile("data.sql")
+	if err != nil {
+		log.Fatalf("Error reading file: %v", err)
+	}
+	statements := strings.Split(string(data), ";")
+
+	db, err := postgres.Connect()
+	if err != nil {
+		log.Fatalf("Failed to create postgres connection: %s", err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		log.Fatalf("Failed to create postgres transaction: %s", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec("TRUNCATE TABLE season")
+	if err != nil {
+		log.Fatalf("Error truncating table: %s", err)
+	}
+	_, err = tx.Exec("TRUNCATE TABLE activity_definition")
+	if err != nil {
+		log.Fatalf("Error truncating table: %s", err)
+	}
+	_, err = tx.Exec("TRUNCATE TABLE version_definition")
+	if err != nil {
+		log.Fatalf("Error truncating table: %s", err)
+	}
+	_, err = tx.Exec("TRUNCATE TABLE activity_hash")
+	if err != nil {
+		log.Fatalf("Error truncating table: %s", err)
+	}
+
+	for _, statement := range statements {
+		// Trim any leading or trailing whitespace
+		query := strings.TrimSpace(statement)
+		if query == "" {
+			continue // Skip empty statements
+		}
+
+		// Execute the SQL statement
+		_, err := tx.Exec(query)
+		if err != nil {
+			log.Fatalf("Error executing statement: %v", err)
+		}
+		log.Println("Statement executed successfully:", query)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		log.Fatalf("Error committing transaction: %s", err)
+	}
+
 	// Connect to the RabbitMQ
-	conn, err := async.Init()
+	conn, err := rabbit.Init()
 	if err != nil {
 		log.Fatalf("Failed to create rabbit connection: %s", err)
 	}
-	defer async.Cleanup()
+	defer rabbit.Cleanup()
 
 	rabbitChannel, err := conn.Channel()
 	if err != nil {
@@ -51,5 +108,8 @@ func main() {
 
 	wg.Wait()
 
-	log.Println("Queued all players for crawl and activity history. Make sure to run bin/hermes")
+	if len(membershipIds) > 0 {
+		log.Println("Queued all players for crawl and activity history. Make sure to run bin/hermes")
+	}
+
 }

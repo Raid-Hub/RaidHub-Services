@@ -23,8 +23,8 @@ type SingleComponentResponseOfDestinyCharacterComponent struct {
 	Data *DestinyCharacterComponent `json:"data"`
 }
 
-func GetCharacter(membershipType int32, membershipId string, characterId string) (*DestinyCharacterResponse, error) {
-	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Profile/%s/Character/%s/?components=200", getBungieURL(), membershipType, membershipId, characterId)
+func GetCharacter(membershipType int32, membershipId int64, characterId int64) (*DestinyCharacterResponse, error) {
+	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Profile/%d/Character/%d/?components=200", getBungieURL(), membershipType, membershipId, characterId)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err

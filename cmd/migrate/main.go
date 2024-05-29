@@ -60,7 +60,7 @@ func main() {
 	}
 	defer db.Close()
 
-	migrationDirectory := "migrations"
+	migrationDirectory := "docker/migrations"
 	migrationFiles, err := getMigrationFiles(migrationDirectory)
 	if err != nil {
 		log.Println("Error getting migration files:", err)

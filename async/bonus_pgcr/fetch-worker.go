@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"raidhub/shared/async"
+	"raidhub/async"
 	"raidhub/shared/pgcr"
 	"strconv"
 

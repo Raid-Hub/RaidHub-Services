@@ -56,7 +56,7 @@ func FetchAndProcessPGCR(client *http.Client, instanceID int64, apiKey string) (
 				return NotFound, nil, nil, err
 			} else if statusCode == 403 {
 				// Rate Limit
-				time.Sleep(30 * time.Second)
+				time.Sleep(120 * time.Second)
 			}
 			return BadFormat, nil, nil, err
 		}

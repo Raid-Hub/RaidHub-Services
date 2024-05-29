@@ -4,10 +4,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
-	"raidhub/shared/async"
+	"raidhub/async"
 	"raidhub/shared/bungie"
 	"raidhub/shared/postgres"
-	"strconv"
 	"sync"
 	"time"
 
@@ -38,15 +37,15 @@ func process_request(msg *amqp.Delivery, db *sql.DB) {
 		log.Printf("Failed to get player: %s", err)
 		return
 	} else if membershipType == -1 || membershipType == 0 {
-		log.Printf("Crawling missing player %s", request.MembershipId)
+		log.Printf("Crawling missing player %d", request.MembershipId)
 		crawl_player_profiles(request.MembershipId, db)
 	} else if lastCrawled == nil || time.Since(*lastCrawled) > 24*time.Hour {
-		log.Printf("Crawling potentially stale player %d/%s", membershipType, request.MembershipId)
+		log.Printf("Crawling potentially stale player %d/%d", membershipType, request.MembershipId)
 		crawl_membership(membershipType, request.MembershipId, db)
 	}
 }
 
-func get_player(membershipId string, db *sql.DB) (int, *time.Time, error) {
+func get_player(membershipId int64, db *sql.DB) (int, *time.Time, error) {
 	var membershipType int
 	var lastCrawled sql.NullTime
 	err := db.QueryRow(`SELECT COALESCE(membership_type, 0), last_crawled FROM player WHERE membership_id = $1 LIMIT 1`, membershipId).Scan(&membershipType, &lastCrawled)
@@ -63,7 +62,7 @@ func get_player(membershipId string, db *sql.DB) (int, *time.Time, error) {
 	}
 }
 
-func crawl_player_profiles(destinyMembershipId string, db *sql.DB) {
+func crawl_player_profiles(destinyMembershipId int64, db *sql.DB) {
 	profiles, err := bungie.GetLinkedProfiles(-1, destinyMembershipId, true)
 	if err != nil {
 		log.Printf("Failed to get linked profiles: %s", err)
@@ -75,7 +74,7 @@ func crawl_player_profiles(destinyMembershipId string, db *sql.DB) {
 	var wg sync.WaitGroup
 	for _, profile := range profiles {
 		wg.Add(1)
-		go func(membershipId string, membershipType int) {
+		go func(membershipId int64, membershipType int) {
 			defer wg.Done()
 			crawl_membership(membershipType, membershipId, db)
 		}(profile.MembershipId, profile.MembershipType)
@@ -84,10 +83,10 @@ func crawl_player_profiles(destinyMembershipId string, db *sql.DB) {
 	wg.Wait()
 }
 
-func crawl_membership(membershipType int, membershipId string, db *sql.DB) {
+func crawl_membership(membershipType int, membershipId int64, db *sql.DB) {
 	profile, err := bungie.GetProfile(membershipType, membershipId)
 	if err != nil {
-		log.Printf("Failed to get profile %d/%s: %s", membershipType, membershipId, err)
+		log.Printf("Failed to get profile %d/%d: %s", membershipType, membershipId, err)
 		return
 	}
 
@@ -101,13 +100,24 @@ func crawl_membership(membershipType int, membershipId string, db *sql.DB) {
 		return
 	}
 
-	tx, err := db.Begin()
-	defer tx.Rollback()
+	var characterId int64
+	for key := range *profile.Characters.Data {
+		characterId = key
+		break
+	}
 
+	_, activityHistoryErrorCode, activityHistoryErr := bungie.GetActivityHistoryPage(membershipType, membershipId, characterId, 0)
+	if activityHistoryErr != nil && activityHistoryErrorCode != 1665 {
+		log.Printf("Activity history error: %s", activityHistoryErr)
+		return
+	}
+
+	tx, err := db.Begin()
 	if err != nil {
 		log.Printf("Failed to initiate transaction: %s", err)
 		return
 	}
+	defer tx.Rollback()
 
 	userInfo := profile.Profile.Data.UserInfo
 	var bungieGlobalDisplayNameCodeStr *string = nil
@@ -120,29 +130,18 @@ func crawl_membership(membershipType int, membershipId string, db *sql.DB) {
 		bungieGlobalDisplayNameCodeStr = bungie.FixBungieGlobalDisplayNameCode(userInfo.BungieGlobalDisplayNameCode)
 	}
 
-	membershipIdInt64, err := strconv.ParseInt(userInfo.MembershipId, 10, 64)
-	if err != nil {
-		log.Printf("Failed to convert membershipId: %s", err)
-		return
-	}
-
 	var iconPath *string = nil
 	var mostRecentDate time.Time = time.Time{}
 	for _, character := range *profile.Characters.Data {
-		dateLastPlayed, err := time.Parse(time.RFC3339, character.DateLastPlayed)
-		if err != nil {
-			continue
-		}
-
-		if iconPath == nil || dateLastPlayed.After(mostRecentDate) {
+		if iconPath == nil || character.DateLastPlayed.After(mostRecentDate) {
 			icon := character.EmblemPath
 			iconPath = &icon
-			mostRecentDate = dateLastPlayed
+			mostRecentDate = character.DateLastPlayed
 		}
 	}
 
 	_, err = postgres.UpsertPlayer(tx, &postgres.Player{
-		MembershipId:                membershipIdInt64,
+		MembershipId:                userInfo.MembershipId,
 		MembershipType:              &userInfo.MembershipType,
 		IconPath:                    iconPath,
 		DisplayName:                 userInfo.DisplayName,
@@ -155,7 +154,7 @@ func crawl_membership(membershipType int, membershipId string, db *sql.DB) {
 		return
 	}
 
-	_, err = tx.Exec(`UPDATE player SET last_crawled = NOW() WHERE membership_id = $1`, membershipId)
+	_, err = tx.Exec(`UPDATE player SET last_crawled = NOW(), is_private = $1 WHERE membership_id = $2`, activityHistoryErrorCode == 1665, membershipId)
 	if err != nil {
 		log.Printf("Failed to update last crawled: %s", err)
 		return
@@ -163,6 +162,6 @@ func crawl_membership(membershipType int, membershipId string, db *sql.DB) {
 	if err = tx.Commit(); err != nil {
 		log.Printf("Failed to commit transaction: %s", err)
 	} else {
-		log.Printf("Upserted membership_id %s", membershipId)
+		log.Printf("Upserted membership_id %d", membershipId)
 	}
 }

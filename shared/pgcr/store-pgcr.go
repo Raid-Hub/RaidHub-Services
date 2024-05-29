@@ -3,8 +3,8 @@ package pgcr
 import (
 	"database/sql"
 	"log"
-	"raidhub/shared/async/character_fill"
-	"raidhub/shared/async/player_crawl"
+	"raidhub/async/character_fill"
+	"raidhub/async/player_crawl"
 	"raidhub/shared/bungie"
 	"raidhub/shared/postgres"
 	"sync"
@@ -81,6 +81,8 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 			return nil, false, err
 		}
 	}
+
+	var characterRequests = make([]character_fill.CharacterFillRequest, 0)
 
 	completedDictionary := map[int64]bool{}
 	fastestClearSoFar := map[int64]int{}
@@ -208,7 +210,11 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 			}
 
 			if character.ClassHash == nil {
-				character_fill.SendMessage(channel, playerActivity.Player.MembershipId, character.CharacterId, pgcr.InstanceId)
+				characterRequests = append(characterRequests, character_fill.CharacterFillRequest{
+					MembershipId: playerActivity.Player.MembershipId,
+					CharacterId:  character.CharacterId,
+					InstanceId:   pgcr.InstanceId,
+				})
 			}
 		}
 
@@ -361,6 +367,10 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 	if err != nil {
 		log.Fatal(err)
 		return nil, false, err
+	}
+
+	for _, req := range characterRequests {
+		character_fill.SendMessage(channel, &req)
 	}
 
 	return &lag, true, nil

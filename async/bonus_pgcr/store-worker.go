@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"raidhub/shared/async"
+	"raidhub/async"
 	"raidhub/shared/bungie"
 	"raidhub/shared/discord"
 	"raidhub/shared/pgcr"
@@ -57,6 +57,10 @@ func process_store_request(msg *amqp.Delivery, db *sql.DB) {
 		}
 		log.Printf("%d added to data set", request.Activity.InstanceId)
 		discord.SendWebhook(os.Getenv("PAN_WEBHOOK_URL"), &webhook)
+
+		for i := request.Activity.InstanceId - 100_000; i < request.Activity.InstanceId+100_000; i++ {
+			pgcr.WriteMissedLog(i)
+		}
 	} else {
 		log.Printf("%d is already added", request.Activity.InstanceId)
 	}
