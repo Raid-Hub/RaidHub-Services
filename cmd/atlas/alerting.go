@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -10,11 +11,14 @@ import (
 	"raidhub/shared/discord"
 	"raidhub/shared/monitoring"
 	"raidhub/shared/pgcr"
+
+	"golang.org/x/time/rate"
 )
 
 var (
 	_atlasWebhookURL string
 	once             sync.Once
+	webhookRl        = rate.NewLimiter(rate.Every(10*time.Second), 5)
 )
 
 func getAtlasWebhookURL() string {
@@ -105,9 +109,15 @@ func logWorkersStarting(numWorkers int, period int, latestId int64) {
 	log.Printf("Info: %d workers starting at %d", numWorkers, latestId)
 }
 
-func logMissedInstance(instanceId int64, startTime time.Time, gapMode bool) {
+func logMissedInstance(instanceId int64, startTime time.Time) {
 	pgcr.WriteMissedLog(instanceId)
-	if !gapMode {
+
+	elapsed := time.Since(startTime).Seconds()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	err := webhookRl.Wait(ctx)
+	if err == nil {
 		webhook := discord.Webhook{
 			Embeds: []discord.Embed{{
 				Title: "Unresolved Instance",
@@ -117,35 +127,43 @@ func logMissedInstance(instanceId int64, startTime time.Time, gapMode bool) {
 					Value: fmt.Sprintf("`%d`", instanceId),
 				}, {
 					Name:  "Time Elapsed",
-					Value: fmt.Sprintf("%1.f seconds", time.Since(startTime).Seconds()),
+					Value: fmt.Sprintf("%1.f seconds", elapsed),
+				}},
+				Timestamp: time.Now().Format(time.RFC3339),
+				Footer:    discord.CommonFooter,
+			}},
+		}
+
+		discord.SendWebhook(getAtlasWebhookURL(), &webhook)
+	}
+	log.Printf("Missed PGCR %d after %1.f seconds", instanceId, time.Since(startTime).Seconds())
+}
+
+func logMissedInstanceWarning(instanceId int64, startTime time.Time) {
+	elapsed := time.Since(startTime).Seconds()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err := webhookRl.Wait(ctx)
+
+	if err == nil {
+		webhook := discord.Webhook{
+			Embeds: []discord.Embed{{
+				Title: "Unresolved Instance (Warning)",
+				Color: 15105570, // Orange
+				Fields: []discord.Field{{
+					Name:  "Instance Id",
+					Value: fmt.Sprintf("`%d`", instanceId),
+				}, {
+					Name:  "Time Elapsed",
+					Value: fmt.Sprintf("%1.f seconds", elapsed),
 				}},
 				Timestamp: time.Now().Format(time.RFC3339),
 				Footer:    discord.CommonFooter,
 			}},
 		}
 		discord.SendWebhook(getAtlasWebhookURL(), &webhook)
-		log.Printf("Missed PGCR %d after %1.f seconds", instanceId, time.Since(startTime).Seconds())
 	}
-
-}
-
-func logMissedInstanceWarning(instanceId int64, startTime time.Time) {
-	webhook := discord.Webhook{
-		Embeds: []discord.Embed{{
-			Title: "Unresolved Instance (Warning)",
-			Color: 15105570, // Orange
-			Fields: []discord.Field{{
-				Name:  "Instance Id",
-				Value: fmt.Sprintf("`%d`", instanceId),
-			}, {
-				Name:  "Time Elapsed",
-				Value: fmt.Sprintf("%1.f seconds", time.Since(startTime).Seconds()),
-			}},
-			Timestamp: time.Now().Format(time.RFC3339),
-			Footer:    discord.CommonFooter,
-		}},
-	}
-	discord.SendWebhook(getAtlasWebhookURL(), &webhook)
 	log.Printf("Warning: instance id %d has not resolved in %1.f seconds", instanceId, time.Since(startTime).Seconds())
 }
 
@@ -164,57 +182,4 @@ func logInsufficentPrivileges(instanceId int64) {
 	}
 	discord.SendWebhook(getAtlasWebhookURL(), &webhook)
 	log.Printf("Warning: InsufficientPrivileges response for instanceId %d", instanceId)
-}
-
-func enterGapModeAlert(variation int64, startId int64, density float64) {
-	webhook := discord.Webhook{
-		Embeds: []discord.Embed{{
-			Title: "Entering Gap Mode",
-			Color: 15105570, // Orange
-			Fields: []discord.Field{{
-				Name:  "Starting Instance Id",
-				Value: fmt.Sprintf("`%d`", startId),
-			}, {
-				Name:  "Trigger Density",
-				Value: fmt.Sprintf("`%.3f`", density),
-			}},
-			Timestamp: time.Now().Format(time.RFC3339),
-			Footer:    discord.CommonFooter,
-		}},
-	}
-	discord.SendWebhook(getAtlasWebhookURL(), &webhook)
-	log.Printf("Alert: %d failures in the last %d IDs (density: %.3f). Activating gap mode. Estimated gap begin: %d", errorBufferSize, variation, density, startId)
-
-}
-
-func exitGapModeAlert(foundCount int, earliestId int64) {
-	webhook := discord.Webhook{
-		Embeds: []discord.Embed{{
-			Title: "Exiting Gap Mode",
-			Color: 3447003, // Blue
-			Fields: []discord.Field{{
-				Name:  "Ealiest Instance Id",
-				Value: fmt.Sprintf("`%d`", earliestId),
-			}},
-			Timestamp: time.Now().Format(time.RFC3339),
-			Footer:    discord.CommonFooter,
-		}},
-	}
-	discord.SendWebhook(getAtlasWebhookURL(), &webhook)
-	log.Printf("Info: %d PGCRs found in gap mode, with the earliest being %d. Deactivating gap mode.", foundCount, earliestId)
-}
-
-func gapModeFailureAlert() {
-	content := fmt.Sprintf("<@&%s>", os.Getenv("ALERTS_ROLE_ID"))
-	webhook := discord.Webhook{
-		Content: &content,
-		Embeds: []discord.Embed{{
-			Title:     "Gap mode ended after 100,000 misses",
-			Color:     10038562, // DarkRed
-			Timestamp: time.Now().Format(time.RFC3339),
-			Footer:    discord.CommonFooter,
-		}},
-	}
-	discord.SendWebhook(getAtlasWebhookURL(), &webhook)
-	log.Fatalf("Gap mode ended after 100,000 misses. Please restart Atlas manually")
 }

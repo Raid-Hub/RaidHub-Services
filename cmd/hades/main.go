@@ -13,11 +13,11 @@ import (
 	"sync"
 	"time"
 
-	"raidhub/shared/async"
 	"raidhub/shared/discord"
 	"raidhub/shared/monitoring"
 	"raidhub/shared/pgcr"
 	"raidhub/shared/postgres"
+	"raidhub/shared/rabbit"
 
 	"github.com/rabbitmq/amqp091-go"
 )
@@ -31,6 +31,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	monitoring.RegisterPrometheus(9091)
 
 	src := filepath.Join(cwd, "logs", "missed.log")
 	temp := filepath.Join(cwd, "logs", "missed.temp.log")
@@ -58,8 +60,6 @@ func main() {
 	}
 	defer file.Close()
 
-	monitoring.RegisterPrometheus(9091)
-
 	// Create a map to store unique numbers
 	uniqueNumbers := make(map[int64]bool)
 
@@ -76,13 +76,26 @@ func main() {
 	}
 
 	if err := scanner.Err(); err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	// Convert unique numbers to a slice for sorting
+	db, err := postgres.Connect()
+	if err != nil {
+		log.Fatalf("Error connecting to the database: %s", err)
+	}
+	defer db.Close()
+	stmnt, err := db.Prepare("SELECT instance_id FROM activity INNER JOIN pgcr USING (instance_id) WHERE instance_id = $1 LIMIT 1;")
 	var numbers []int64
 	for num := range uniqueNumbers {
-		numbers = append(numbers, num)
+		var foo int64
+		err := stmnt.QueryRow(num).Scan(&foo)
+		if err != nil {
+			log.Printf("Preparing %d", num)
+			numbers = append(numbers, num)
+		} else {
+			log.Printf("Skipping %d", num)
+		}
 	}
 
 	log.Printf("Found %d missing PGCRs", len(numbers))
@@ -91,17 +104,16 @@ func main() {
 		return numbers[i] < numbers[j]
 	})
 
-	db, err := postgres.Connect()
 	if err != nil {
 		log.Fatalf("Error connecting to the database: %s", err)
 	}
 	defer db.Close()
 
-	conn, err := async.Init()
+	conn, err := rabbit.Init()
 	if err != nil {
 		log.Fatalf("Error connecting to rabbit: %s", err)
 	}
-	defer async.Cleanup()
+	defer rabbit.Cleanup()
 
 	rabbitChannel, err := conn.Channel()
 	if err != nil {
@@ -170,6 +182,7 @@ func worker(ch chan int64, successes chan int64, failures chan int64, db *sql.DB
 		}
 
 		if result == pgcr.NonRaid {
+			log.Printf("Non raid %d", instanceID)
 			continue
 		} else if result == pgcr.Success {
 			_, committed, err := pgcr.StorePGCR(activity, raw, db, rabbitChannel)
@@ -177,10 +190,8 @@ func worker(ch chan int64, successes chan int64, failures chan int64, db *sql.DB
 				log.Printf("Failed to store raid %d: %s", instanceID, err)
 				writeMissedLog(instanceID)
 				failures <- instanceID
-			} else {
-				if committed {
-					log.Printf("Found raid %d", instanceID)
-				}
+			} else if committed {
+				log.Printf("Found raid %d", instanceID)
 				successes <- instanceID
 			}
 		} else {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"raidhub/shared/async"
+	"raidhub/async"
 	"raidhub/shared/clickhouse"
 	"time"
 
@@ -41,8 +41,8 @@ func SendToClickhouse(ch *amqp.Channel, activity *ProcessedActivity) error {
 }
 
 const (
-	batchSize = 1024
-	batchTime = 10 * time.Minute
+	batchSize = 8192
+	batchTime = 60 * time.Minute
 )
 
 func process_queue(qw *async.QueueWorker, msgs <-chan amqp.Delivery) {
@@ -102,129 +102,104 @@ func process(msgs []amqp.Delivery, c *driver.Conn) {
 		}
 
 	}()
-
-	var instances []clickhouse.Instance
-	var players []clickhouse.InstancePlayer
-	var characters []clickhouse.InstanceCharacter
-	var weapons []clickhouse.InstanceCharacterWeapon
-
+	var instances []clickhouse.ClickhouseInstance
 	for _, msg := range msgs {
 		var request ProcessedActivity
 		if err := json.Unmarshal(msg.Body, &request); err != nil {
 			log.Println("Failed to unmarshal message:", err)
 			return
 		}
-
-		instance, newPlayers, newCharacters, newWeapons := parse(request)
-		instances = append(instances, *instance)
-		players = append(players, newPlayers...)
-		characters = append(characters, newCharacters...)
-		weapons = append(weapons, newWeapons...)
+		instances = append(instances, *parse(request))
 	}
 
-	err := clickhouse.InsertInstances(*c, instances)
+	err := clickhouse.InsertProcessedInstances(*c, instances)
 	if err != nil {
 		log.Fatalf("Failed to insert instances: %s", err)
-	}
-
-	err = clickhouse.InsertInstancePlayers(*c, players)
-	if err != nil {
-		log.Fatalf("Failed to insert players: %s", err)
-	}
-
-	err = clickhouse.InsertInstanceCharacters(*c, characters)
-	if err != nil {
-		log.Fatalf("Failed to insert characters: %s", err)
-	}
-
-	err = clickhouse.InsertCharacterWeapons(*c, weapons)
-	if err != nil {
-		log.Fatalf("Failed to insert weapons: %s", err)
 	}
 
 	success = true
 }
 
-func parse(request ProcessedActivity) (*clickhouse.Instance, []clickhouse.InstancePlayer, []clickhouse.InstanceCharacter, []clickhouse.InstanceCharacterWeapon) {
-	instance := clickhouse.Instance{
-		InstanceId:    request.InstanceId,
-		Hash:          request.Hash,
-		Completed:     request.Completed,
-		PlayerCount:   request.PlayerCount,
-		DateStarted:   request.DateStarted,
-		DateCompleted: request.DateCompleted,
-		PlatformType:  uint16(request.MembershipType),
-		Duration:      request.DurationSeconds,
-		Score:         request.Score,
+func parse(request ProcessedActivity) *clickhouse.ClickhouseInstance {
+	instance := clickhouse.ClickhouseInstance{
+		"instance_id":    request.InstanceId,
+		"hash":           request.Hash,
+		"completed":      request.Completed,
+		"player_count":   request.PlayerCount,
+		"fresh":          2,
+		"flawless":       2,
+		"date_started":   request.DateStarted,
+		"date_completed": request.DateCompleted,
+		"platform_type":  uint16(request.MembershipType),
+		"duration":       request.DurationSeconds,
+		"score":          request.Score,
 	}
-	if request.Fresh == nil {
-		instance.Fresh = 2
-	} else if *request.Fresh {
-		instance.Fresh = 1
-	} else {
-		instance.Fresh = 0
-	}
-
-	if request.Flawless == nil {
-		instance.Flawless = 2
-	} else if *request.Flawless {
-		instance.Flawless = 1
-	} else {
-		instance.Flawless = 0
-	}
-
-	var players []clickhouse.InstancePlayer
-	var characters []clickhouse.InstanceCharacter
-	var weapons []clickhouse.InstanceCharacterWeapon
-
-	for _, player := range request.Players {
-		instancePlayer := clickhouse.InstancePlayer{
-			InstanceId:        request.InstanceId,
-			MembershipId:      player.Player.MembershipId,
-			Completed:         player.Finished,
-			TimePlayedSeconds: player.TimePlayedSeconds,
-			Sherpas:           player.Sherpas,
-			IsFirstClear:      player.IsFirstClear,
+	if request.Fresh != nil {
+		if *request.Fresh {
+			instance["fresh"] = 1
+		} else {
+			instance["fresh"] = 0
 		}
-		players = append(players, instancePlayer)
+	}
+	if request.Flawless != nil {
+		if *request.Flawless {
+			instance["flawless"] = 1
+		} else {
+			instance["flawless"] = 0
+		}
+	}
 
-		for _, character := range player.Characters {
-			instanceCharacter := clickhouse.InstanceCharacter{
-				InstanceId:        request.InstanceId,
-				MembershipId:      player.Player.MembershipId,
-				CharacterId:       character.CharacterId,
-				Completed:         character.Completed,
-				Score:             character.Score,
-				Kills:             character.Kills,
-				Assists:           character.Assists,
-				Deaths:            character.Deaths,
-				PrecisionKills:    character.PrecisionKills,
-				SuperKills:        character.SuperKills,
-				GrenadeKills:      character.GrenadeKills,
-				MeleeKills:        character.MeleeKills,
-				TimePlayedSeconds: character.TimePlayedSeconds,
-				StartSeconds:      character.StartSeconds,
+	players := make([]map[string]interface{}, len(request.Players))
+
+	for i, player := range request.Players {
+		instancePlayer := map[string]interface{}{
+			"membership_id":       player.Player.MembershipId,
+			"completed":           player.Finished,
+			"time_played_seconds": player.TimePlayedSeconds,
+			"sherpas":             player.Sherpas,
+			"is_first_clear":      player.IsFirstClear,
+		}
+		characters := make([]map[string]interface{}, len(player.Characters))
+
+		for j, character := range player.Characters {
+			instanceCharacter := map[string]interface{}{
+				"character_id":        character.CharacterId,
+				"class_hash":          0,
+				"emblem_hash":         0,
+				"completed":           character.Completed,
+				"score":               character.Score,
+				"kills":               character.Kills,
+				"assists":             character.Assists,
+				"deaths":              character.Deaths,
+				"precision_kills":     character.PrecisionKills,
+				"super_kills":         character.SuperKills,
+				"grenade_kills":       character.GrenadeKills,
+				"melee_kills":         character.MeleeKills,
+				"time_played_seconds": character.TimePlayedSeconds,
+				"start_seconds":       character.StartSeconds,
 			}
 			if character.ClassHash != nil {
-				instanceCharacter.ClassHash = *character.ClassHash
+				instanceCharacter["class_hash"] = *character.ClassHash
 			}
 			if character.EmblemHash != nil {
-				instanceCharacter.EmblemHash = *character.EmblemHash
+				instanceCharacter["emblem_hash"] = *character.EmblemHash
 			}
-			characters = append(characters, instanceCharacter)
+			weapons := make([]map[string]interface{}, len(character.Weapons))
 
-			for _, weapon := range character.Weapons {
-				instanceCharacterWeapon := clickhouse.InstanceCharacterWeapon{
-					InstanceId:     request.InstanceId,
-					MembershipId:   player.Player.MembershipId,
-					CharacterId:    character.CharacterId,
-					WeaponHash:     weapon.WeaponHash,
-					Kills:          weapon.Kills,
-					PrecisionKills: weapon.PrecisionKills,
+			for k, weapon := range character.Weapons {
+				instanceCharacterWeapon := map[string]interface{}{
+					"weapon_hash":     weapon.WeaponHash,
+					"kills":           weapon.Kills,
+					"precision_kills": weapon.PrecisionKills,
 				}
-				weapons = append(weapons, instanceCharacterWeapon)
+				weapons[k] = instanceCharacterWeapon
 			}
+			instanceCharacter["weapons"] = weapons
+			characters[j] = instanceCharacter
 		}
+		instancePlayer["characters"] = characters
+		players[i] = instancePlayer
 	}
-	return &instance, players, characters, weapons
+	instance["players"] = players
+	return &instance
 }

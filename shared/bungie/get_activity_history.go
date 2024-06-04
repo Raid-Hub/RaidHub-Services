@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -26,13 +25,21 @@ type DestinyHistoricalStatsPeriodGroup struct {
 	ActivityDetails DestinyHistoricalStatsActivity `json:"activityDetails"`
 }
 
-const concurrentPages = 5
-
-func GetActivityHistory(membershipType int, membershipId string, characterId string, out chan int64) {
+func GetActivityHistory(membershipType int, membershipId int64, characterId int64, concurrentPages int, out chan int64) error {
 	ch := make(chan int)
+
+	results, _, err := GetActivityHistoryPage(membershipType, membershipId, characterId, 0)
+	if err != nil {
+		return err
+	}
+
+	for _, activity := range results {
+		out <- activity.ActivityDetails.InstanceId
+	}
+
 	open := true
 	go func() {
-		i := 0
+		i := 1
 		for open {
 			ch <- i
 			i++
@@ -46,10 +53,9 @@ func GetActivityHistory(membershipType int, membershipId string, characterId str
 			defer wg.Done()
 
 			for page := range ch {
-				results, err := getActivityHistoryPage(membershipType, membershipId, characterId, page)
+				results, _, err := GetActivityHistoryPage(membershipType, membershipId, characterId, page)
 				if err != nil {
 					log.Printf("Error fetching activity history page: %s", err)
-					break
 				}
 
 				if len(results) == 0 {
@@ -57,12 +63,7 @@ func GetActivityHistory(membershipType int, membershipId string, characterId str
 				}
 
 				for _, activity := range results {
-					instanceId, err := strconv.ParseInt(activity.ActivityDetails.InstanceId, 10, 64)
-					if err != nil {
-						log.Printf("Error parsing instance id: %s", err)
-						continue
-					}
-					out <- instanceId
+					out <- activity.ActivityDetails.InstanceId
 				}
 			}
 		}()
@@ -70,14 +71,15 @@ func GetActivityHistory(membershipType int, membershipId string, characterId str
 
 	wg.Wait()
 	open = false
+	return nil
 }
 
-func getActivityHistoryPage(membershipType int, membershipId string, characterId string, page int) ([]DestinyHistoricalStatsPeriodGroup, error) {
-	log.Printf("Getting /Destiny2/%d/Account/%s/Character/%s/ page=%d", membershipType, membershipId, characterId, page)
-	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Account/%s/Character/%s/Stats/Activities/?mode=4&count=250&page=%d", getBungieURL(), membershipType, membershipId, characterId, page)
+func GetActivityHistoryPage(membershipType int, membershipId int64, characterId int64, page int) ([]DestinyHistoricalStatsPeriodGroup, int, error) {
+	log.Printf("Getting /Destiny2/%d/Account/%d/Character/%d/ page=%d", membershipType, membershipId, characterId, page)
+	url := fmt.Sprintf("%s/Platform/Destiny2/%d/Account/%d/Character/%d/Stats/Activities/?mode=4&count=250&page=%d", getBungieURL(), membershipType, membershipId, characterId, page)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return []DestinyHistoricalStatsPeriodGroup{}, err
+		return []DestinyHistoricalStatsPeriodGroup{}, 0, err
 	}
 
 	apiKey := os.Getenv("BUNGIE_API_KEY")
@@ -86,7 +88,7 @@ func getActivityHistoryPage(membershipType int, membershipId string, characterId
 	resp, err := http.DefaultClient.Do(req)
 
 	if err != nil {
-		return []DestinyHistoricalStatsPeriodGroup{}, err
+		return []DestinyHistoricalStatsPeriodGroup{}, 0, err
 	}
 	defer resp.Body.Close()
 
@@ -95,7 +97,7 @@ func getActivityHistoryPage(membershipType int, membershipId string, characterId
 	if resp.StatusCode != http.StatusOK {
 		var data BungieError
 		if err := decoder.Decode(&data); err != nil {
-			return []DestinyHistoricalStatsPeriodGroup{}, err
+			return []DestinyHistoricalStatsPeriodGroup{}, 0, err
 		}
 
 		defer func() {
@@ -104,13 +106,13 @@ func getActivityHistoryPage(membershipType int, membershipId string, characterId
 			}
 		}()
 
-		return []DestinyHistoricalStatsPeriodGroup{}, fmt.Errorf("error response: %s (%d)", data.Message, data.ErrorCode)
+		return []DestinyHistoricalStatsPeriodGroup{}, data.ErrorCode, fmt.Errorf("error response: %s (%d)", data.Message, data.ErrorCode)
 	}
 
 	var data ActivityHistoryResponse
 	if err := decoder.Decode(&data); err != nil {
-		return []DestinyHistoricalStatsPeriodGroup{}, err
+		return []DestinyHistoricalStatsPeriodGroup{}, 0, err
 	}
 
-	return data.Response.Activities, nil
+	return data.Response.Activities, data.ErrorCode, nil
 }

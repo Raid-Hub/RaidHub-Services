@@ -50,7 +50,7 @@ func StoreJSON(report *bungie.DestinyPostGameCarnageReport, db *sql.DB) error {
 	}
 
 	if rowsAdded == 0 {
-		log.Printf("Duplicate raw PGCR: %s", report.ActivityDetails.InstanceId)
+		log.Printf("Duplicate raw PGCR: %d", report.ActivityDetails.InstanceId)
 	}
 
 	err = tx.Commit()
@@ -85,7 +85,7 @@ func RetrieveJSON(instanceId int64, db *sql.DB) (*bungie.DestinyPostGameCarnageR
 	}
 
 	// Decompress the JSON data
-	decompressedJSON, err := gzipDecompress(compressedData)
+	decompressedJSON, err := GzipDecompress(compressedData)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func RetrieveJSON(instanceId int64, db *sql.DB) (*bungie.DestinyPostGameCarnageR
 	return &data, nil
 }
 
-func gzipDecompress(data []byte) ([]byte, error) {
+func GzipDecompress(data []byte) ([]byte, error) {
 	r, err := gzip.NewReader(strings.NewReader(string(data)))
 	if err != nil {
 		return nil, err

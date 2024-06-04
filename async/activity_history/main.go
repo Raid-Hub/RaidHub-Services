@@ -1,19 +1,18 @@
-package player_crawl
+package activity_history
 
 import (
 	"context"
 	"encoding/json"
-	"raidhub/shared/async"
-	"strconv"
+	"raidhub/async"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-type PlayerRequest struct {
-	MembershipId string `json:"membershipId"`
+type ActivityHistoryRequest struct {
+	MembershipId int64 `json:"membershipId,string"`
 }
 
-const queueName = "player_requests"
+const queueName = "activity_history"
 
 func Create() async.QueueWorker {
 	return async.QueueWorker{
@@ -23,8 +22,8 @@ func Create() async.QueueWorker {
 }
 
 func SendMessage(ch *amqp.Channel, membershipId int64) error {
-	body, err := json.Marshal(PlayerRequest{
-		MembershipId: strconv.FormatInt(membershipId, 10),
+	body, err := json.Marshal(ActivityHistoryRequest{
+		MembershipId: membershipId,
 	})
 	if err != nil {
 		return err
@@ -34,7 +33,7 @@ func SendMessage(ch *amqp.Channel, membershipId int64) error {
 		context.Background(),
 		"",        // exchange
 		queueName, // routing key (queue name)
-		false,     // mandatory
+		true,      // mandatory
 		false,     // immediate
 		amqp.Publishing{
 			ContentType: "application/json",

@@ -3,7 +3,7 @@ package bonus_pgcr
 import (
 	"context"
 	"encoding/json"
-	"raidhub/shared/async"
+	"raidhub/async"
 	"raidhub/shared/bungie"
 	"raidhub/shared/pgcr"
 	"strconv"

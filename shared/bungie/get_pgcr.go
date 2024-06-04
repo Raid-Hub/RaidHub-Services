@@ -45,7 +45,7 @@ type DestinyPostGameCarnageReport struct {
 
 type DestinyPostGameCarnageReportEntry struct {
 	Player      DestinyPostGameCarnageReportPlayer        `json:"player"`
-	CharacterId string                                    `json:"characterId"`
+	CharacterId int64                                     `json:"characterId,string"`
 	Values      map[string]DestinyHistoricalStatsValue    `json:"values"`
 	Extended    *DestinyPostGameCarnageReportExtendedData `json:"extended"`
 	Score       DestinyHistoricalStatsValuePair           `json:"score"`

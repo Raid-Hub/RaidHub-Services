@@ -3,16 +3,15 @@ package character_fill
 import (
 	"context"
 	"encoding/json"
-	"raidhub/shared/async"
-	"strconv"
+	"raidhub/async"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type CharacterFillRequest struct {
-	MembershipId string `json:"membershipId"`
-	CharacterId  string `json:"characterId"`
-	InstanceId   string `json:"instanceId"`
+	MembershipId int64 `json:"membershipId,string"`
+	CharacterId  int64 `json:"characterId,string"`
+	InstanceId   int64 `json:"instanceId,string"`
 }
 
 const queueName = "character_fill"
@@ -24,12 +23,8 @@ func Create() async.QueueWorker {
 	}
 }
 
-func SendMessage(ch *amqp.Channel, membershipId int64, characterId int64, instanceId int64) error {
-	body, err := json.Marshal(CharacterFillRequest{
-		MembershipId: strconv.FormatInt(membershipId, 10),
-		CharacterId:  strconv.FormatInt(characterId, 10),
-		InstanceId:   strconv.FormatInt(instanceId, 10),
-	})
+func SendMessage(ch *amqp.Channel, data *CharacterFillRequest) error {
+	body, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}

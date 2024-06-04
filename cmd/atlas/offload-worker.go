@@ -2,17 +2,19 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
+	"raidhub/shared/monitoring"
 	"raidhub/shared/pgcr"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func offloadWorker(ch chan int64, failuresChannel chan int64, rabbitChannel *amqp.Channel, db *sql.DB) {
+func offloadWorker(ch chan int64, rabbitChannel *amqp.Channel, db *sql.DB) {
 	securityKey := os.Getenv("BUNGIE_API_KEY")
 
 	client := &http.Client{}
@@ -24,6 +26,10 @@ func offloadWorker(ch chan int64, failuresChannel chan int64, rabbitChannel *amq
 			startTime := time.Now()
 			for i := 1; i <= 5; i++ {
 				result, activity, raw, err := pgcr.FetchAndProcessPGCR(client, instanceId, securityKey)
+
+				statusStr := fmt.Sprintf("%d", result)
+				attemptsStr := fmt.Sprintf("%d", -i)
+				monitoring.PGCRCrawlStatus.WithLabelValues(statusStr, attemptsStr).Inc()
 
 				if err != nil {
 					log.Println(err)
@@ -50,14 +56,13 @@ func offloadWorker(ch chan int64, failuresChannel chan int64, rabbitChannel *amq
 				}
 
 				if i == 3 {
-					logMissedInstanceWarning(instanceId, startTime)
+					go logMissedInstanceWarning(instanceId, startTime)
 				}
 
 				// Exponential Backoff
 				time.Sleep(time.Duration(10*i*i) * time.Second)
 			}
-			logMissedInstance(instanceId, startTime, false)
-			failuresChannel <- instanceId
+			go logMissedInstance(instanceId, startTime)
 
 		}(id)
 	}

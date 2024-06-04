@@ -34,3 +34,5 @@ INSERT INTO "activity_hash" ("hash", "activity_id", "version_id") VALUES
     (4169648182, 101, 131);
 
 ALTER TABLE "activity" ADD CONSTRAINT "activity_hash_fk" FOREIGN KEY ("hash") REFERENCES "activity_hash"("hash");
+
+CREATE INDEX "score_idx" ON "activity"("hash", "score" DESC) WHERE "completed" AND "fresh" AND "score" > 0
