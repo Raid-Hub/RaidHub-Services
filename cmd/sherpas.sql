@@ -1,21 +1,25 @@
+-- Set everyones first raid clears 
 BEGIN;
 
--- Set everyones first raid clears 
+UPDATE activity_player SET is_first_clear = false;
+
 WITH firsts AS (
-    SELECT 
-        instance_id,
+    SELECT DISTINCT ON (ap.membership_id, ah.activity_id)
+        ap.instance_id,
         ap.membership_id,
-        ah.activity_id,
-        ROW_NUMBER() OVER (PARTITION BY ap.membership_id, ah.activity_id ORDER BY a.date_completed ASC) AS clear_num
+        ah.activity_id
     FROM activity_player ap
     JOIN activity a USING (instance_id)
     JOIN activity_hash ah USING (hash)
     WHERE ap.completed
+    ORDER BY ap.membership_id, ah.activity_id, date_completed ASC;
 )
 UPDATE activity_player ap
-SET is_first_clear = f.clear_num = 1
+SET is_first_clear = true
 FROM firsts f
 WHERE ap.instance_id = f.instance_id AND ap.membership_id = f.membership_id;
+
+COMMIT;
 
 -- Set the sherpa count for each activity_player
 WITH sherpas AS (
@@ -29,6 +33,7 @@ FROM sherpas s
 WHERE ap.instance_id = s.instance_id 
     AND NOT ap.is_first_clear;
 
+
 -- Update activity level stats
 WITH p_stats AS (
     SELECT 
@@ -39,7 +44,7 @@ WITH p_stats AS (
         SUM(ap.sherpas) as sherpa_count, 
         SUM(CASE WHEN a.player_count = 3 THEN 1 ELSE 0 END) as trios,
         SUM(CASE WHEN a.player_count = 2 THEN 1 ELSE 0 END) as duos,
-        SUM(CASE WHEN a.player_count = 1 THEN 1 ELSE 0 END) as solos,
+        SUM(CASE WHEN a.player_count = 1 THEN 1 ELSE 0 END) as solos
     FROM activity_player ap
     JOIN activity a USING (instance_id)
     JOIN activity_hash ah USING (hash)
@@ -74,5 +79,3 @@ UPDATE player SET
     sherpas = g_stats.sherpas
 FROM g_stats
 WHERE g_stats.membership_id = player.membership_id;
-
-COMMIT;

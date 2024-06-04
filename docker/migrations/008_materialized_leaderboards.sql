@@ -1,15 +1,3 @@
-ALTER TABLE "activity_definition"
-ADD COLUMN "path" TEXT NOT NULL,
-ADD COLUMN "release_date" TIMESTAMP(0) NOT NULL,
-ADD COLUMN "day_one_end" TIMESTAMP(0) GENERATED ALWAYS AS ("release_date" + INTERVAL '1 day') STORED,
-ADD COLUMN "contest_end" TIMESTAMP(0),
-ADD COLUMN "week_one_end" TIMESTAMP(0);
-
-ALTER TABLE "activity_hash"
-ADD COLUMN "is_world_first" BOOLEAN NOT NULL DEFAULT false,
-ADD COLUMN "release_date_override" TIMESTAMP(0);
-
-ALTER TABLE "version_definition" ADD COLUMN "path" TEXT NOT NULL;
 
 CREATE MATERIALIZED VIEW "individual_raid_leaderboard" AS
   SELECT
@@ -89,6 +77,36 @@ CREATE UNIQUE INDEX idx_individual_pantheon_version_leaderboard_fresh_clears ON 
 CREATE UNIQUE INDEX idx_individual_pantheon_version_leaderboard_score ON individual_pantheon_version_leaderboard (version_id ASC, score_position ASC);
 
 
+-- Materialized Views
+CREATE MATERIALIZED VIEW "individual_global_leaderboard" AS
+  SELECT
+    membership_id,
+
+    clears,
+    ROW_NUMBER() OVER (ORDER BY clears DESC, membership_id ASC) AS clears_position,
+    RANK() OVER (ORDER BY clears DESC) AS clears_rank,
+
+    fresh_clears,
+    ROW_NUMBER() OVER (ORDER BY fresh_clears DESC, membership_id ASC) AS fresh_clears_position,
+    RANK() OVER (ORDER BY fresh_clears DESC) AS fresh_clears_rank,
+    
+    sherpas,
+    ROW_NUMBER() OVER (ORDER BY sherpas DESC, membership_id ASC) AS sherpas_position,
+    RANK() OVER (ORDER BY sherpas DESC) AS sherpas_rank,
+
+    sum_of_best as speed,
+    ROW_NUMBER() OVER (ORDER BY sum_of_best ASC, membership_id ASC) AS speed_position,
+    RANK() OVER (ORDER BY sum_of_best ASC) AS speed_rank
+    
+  FROM player
+  WHERE clears > 0 AND NOT is_private AND cheat_level < 2;
+
+CREATE UNIQUE INDEX idx_global_leaderboard_membership_id ON global_leaderboard (membership_id ASC);
+CREATE UNIQUE INDEX idx_global_leaderboard_clears ON global_leaderboard (clears_position ASC);
+CREATE UNIQUE INDEX idx_global_leaderboard_fresh_clears ON global_leaderboard (fresh_clears_position ASC);
+CREATE UNIQUE INDEX idx_global_leaderboard_sherpas ON global_leaderboard (sherpas_position ASC);
+CREATE UNIQUE INDEX idx_global_leaderboard_speed ON global_leaderboard (speed_position ASC);
+
 CREATE MATERIALIZED VIEW "team_activity_version_leaderboard" AS
   WITH raw AS (
     SELECT
@@ -138,9 +156,12 @@ CREATE MATERIALIZED VIEW "world_first_contest_leaderboard" AS
       ROW_NUMBER() OVER (PARTITION BY "activity_id" ORDER BY "date_completed" ASC) AS "position",
       RANK() OVER (PARTITION BY "activity_id" ORDER BY "date_completed" ASC) AS "rank",
       "instance_id",
-      EXTRACT(EPOCH FROM ("date_completed" - "release_date")) AS "time_after_launch"
+      "date_completed",
+      EXTRACT(EPOCH FROM ("date_completed" - "release_date")) AS "time_after_launch",
+      "is_challenge_mode"
     FROM "activity_hash"
     INNER JOIN "activity_definition" ON "activity_definition"."id" = "activity_hash"."activity_id"
+    INNER JOIN "version_definition" ON "version_definition"."id" = "activity_hash"."version_id"
     LEFT JOIN LATERAL (
       SELECT 
         "instance_id", 
@@ -149,7 +170,7 @@ CREATE MATERIALIZED VIEW "world_first_contest_leaderboard" AS
       WHERE "hash" = "activity_hash"."hash" 
         AND "completed" AND "cheat_override" = false
         AND "date_completed" < COALESCE("contest_end", "week_one_end")
-      LIMIT 100000
+      LIMIT 80000
     ) as "__inner__" ON true
     WHERE "is_world_first" = true
   )

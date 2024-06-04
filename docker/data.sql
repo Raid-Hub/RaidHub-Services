@@ -24,7 +24,7 @@ INSERT INTO "season" ("id", "short_name", "long_name", "dlc", "start_date") VALU
     (21, 'Deep', 'Season of the Deep', 'Lightfall', '2023-05-23 17:00:00Z'),
     (22, 'Witch', 'Season of the Witch', 'Lightfall', '2023-08-22 17:00:00Z'),
     (23, 'Wish', 'Season of the Wish', 'Lightfall', '2023-11-28 17:00:00Z'),
-    (24, '[REDACTED]', 'Season of [REDACTED]', 'The Final Shape', '2024-06-04 17:00:00Z');
+    (24, 'Echoes', 'Echoes', 'The Final Shape', '2024-06-04 17:00:00Z');
 
 
 -- Insert Raid data
@@ -43,6 +43,7 @@ VALUES
     (11, 'King''s Fall', false, true, 'kingsfall', '2022-08-26 17:00:00', '2022-08-27 17:00:00', '2022-08-30 17:00:00'),
     (12, 'Root of Nightmares', false, true, 'rootofnightmares', '2023-03-10 17:00:00', '2023-03-12 17:00:00', '2023-03-14 17:00:00'),
     (13, 'Crota''s End', false, true, 'crotasend', '2023-09-01 17:00:00', '2023-09-03 17:00:00', '2023-09-05 17:00:00'),
+    (13, 'Salvation''s Edge', false, true, 'salvationsedge', '2024-06-07 17:00:00', '2024-06-09 17:00:00', '2024-06-11 17:00:00'),
     (101, 'The Pantheon', false, false, 'pantheon', '2024-04-30 17:00:00', NULL, NULL);
 
 
@@ -189,3 +190,12 @@ INSERT INTO "activity_hash" ("hash", "activity_id", "version_id", "release_date_
     (4169648177, 101, 130, '2024-05-14 17:00:00'),
     -- Nezarec Sublime
     (4169648182, 101, 131, '2024-05-21 17:00:00');
+
+UPDATE activity_definition SET milestone_hash = 3181387331 WHERE id = 4; 
+UPDATE activity_definition SET milestone_hash = 2712317338 WHERE id = 7; 
+UPDATE activity_definition SET milestone_hash = 541780856 WHERE id = 8;
+UPDATE activity_definition SET milestone_hash = 1888320892 WHERE id = 9;
+UPDATE activity_definition SET milestone_hash = 2136320298 WHERE id = 10;
+UPDATE activity_definition SET milestone_hash = 292102995 WHERE id = 11; 
+UPDATE activity_definition SET milestone_hash = 3699252268 WHERE id = 12;
+UPDATE activity_definition SET milestone_hash = 540415767 WHERE id = 13;
