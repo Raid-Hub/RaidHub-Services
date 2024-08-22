@@ -1,9 +1,9 @@
 ALTER TABLE "activity_definition"
 ADD COLUMN "path" TEXT NOT NULL,
-ADD COLUMN "release_date" TIMESTAMP(0) NOT NULL,
-ADD COLUMN "day_one_end" TIMESTAMP(0) GENERATED ALWAYS AS ("release_date" + INTERVAL '1 day') STORED,
-ADD COLUMN "contest_end" TIMESTAMP(0),
-ADD COLUMN "week_one_end" TIMESTAMP(0),
+ADD COLUMN "release_date" TIMESTAMP(0) WITH TIME ZONE NOT NULL,
+ADD COLUMN "day_one_end" TIMESTAMP(0) WITH TIME ZONE GENERATED ALWAYS AS ("release_date" AT TIME ZONE 'UTC' + INTERVAL '1 day') STORED,
+ADD COLUMN "contest_end" TIMESTAMP(0) WITH TIME ZONE,
+ADD COLUMN "week_one_end" TIMESTAMP(0) WITH TIME ZONE,
 ADD COLUMN "milestone_hash" BIGINT;
 
 ALTER TABLE "activity_hash"

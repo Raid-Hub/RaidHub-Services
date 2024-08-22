@@ -40,7 +40,7 @@ func main() {
 	playersQueue := player_crawl.Create()
 	playersQueue.Db = db
 	playersQueue.Conn = conn
-	go playersQueue.Register(6)
+	go playersQueue.Register(10)
 
 	activityCharactersQueue := character_fill.Create()
 	activityCharactersQueue.Db = db

@@ -32,8 +32,8 @@ CREATE TABLE "activity" (
     "completed" BOOLEAN NOT NULL,
     "fresh" BOOLEAN,
     "player_count" INTEGER NOT NULL,
-    "date_started" TIMESTAMP(3) NOT NULL,
-    "date_completed" TIMESTAMP(3) NOT NULL,
+    "date_started" TIMESTAMP(0) WITH TIME ZONE NOT NULL,
+    "date_completed" TIMESTAMP(0) WITH TIME ZONE NOT NULL,
     "duration" INTEGER NOT NULL,
     "platform_type" INTEGER NOT NULL,
 
@@ -69,8 +69,8 @@ CREATE TABLE "player" (
     "sherpas" INTEGER NOT NULL DEFAULT 0,
     "sum_of_best" INTEGER,
     "last_crawled" TIMESTAMP(3),
-    "_search_score" NUMERIC GENERATED ALWAYS AS (
-        sqrt("clears" + 1) * power(2, GREATEST(0, EXTRACT(EPOCH FROM ("last_seen" - TIMESTAMP '2017-08-27'))) / 20000000)
+    "_search_score" NUMERIC(14, 4) GENERATED ALWAYS AS (
+        sqrt("clears" + 1) * power(2, GREATEST(0, EXTRACT(EPOCH FROM ("last_seen" AT TIME ZONE 'UTC' - TIMESTAMP '2017-08-27'))) / 20000000)
     ) STORED
 );
 
@@ -143,9 +143,28 @@ CREATE TABLE "activity_leaderboard_entry" (
 CREATE INDEX "activity_leaderboard_entry_instance_id_index" ON "activity_leaderboard_entry" ("instance_id");
 CREATE INDEX "activity_leaderboard_position" ON "activity_leaderboard_entry"("leaderboard_id", "position" ASC);
 
+CREATE TABLE "class_definition" (
+    "hash" BIGINT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL
+);
+
+
 -- Raw PGCR Data
 CREATE TABLE "pgcr" (
     "instance_id" BIGINT NOT NULL PRIMARY KEY,
     "data" BYTEA NOT NULL,
     "date_crawled" TIMESTAMP DEFAULT NOW()
 );
+
+CREATE OR REPLACE FUNCTION decrement_clears_trigger()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Check if player_activity.completed is true
+    IF OLD.completed = true THEN
+        -- Decrement the clears column in the player table 
+        UPDATE player SET clears = clears - 1
+        WHERE membership_id = OLD.membership_id;
+    END IF;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;

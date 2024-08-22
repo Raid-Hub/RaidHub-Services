@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"context"
 	"database/sql"
 	"flag"
 	"fmt"
@@ -195,7 +196,10 @@ func main() {
 	}
 	defer db.Close()
 
-	rows, err := definitions.Query(`SELECT 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	rows, err := definitions.QueryContext(ctx, `SELECT 
 			json_extract(json, '$.hash'), 
 			json_extract(json, '$.displayProperties.name'), 
 			json_extract(json, '$.displayProperties.icon'), 
@@ -213,13 +217,13 @@ func main() {
 	}
 	defer rows.Close()
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare(`INSERT INTO weapon_definition 
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO weapon_definition 
 		(hash, name, icon_path, element, ammo_type, slot, rarity) 
 		VALUES ($1::bigint, $2, $3, get_element($4), get_ammo_type($5), get_slot($6), $7)`)
 	if err != nil {
@@ -232,7 +236,7 @@ func main() {
 
 	log.Println("Statement prepared")
 
-	_, err = tx.Exec("TRUNCATE TABLE weapon_definition")
+	_, err = tx.ExecContext(ctx, "TRUNCATE TABLE weapon_definition")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -253,7 +257,7 @@ func main() {
 			log.Fatal(err)
 		}
 
-		_, err := stmt.Exec(hash, name, icon, element, ammoType, slot, rarity)
+		_, err := stmt.ExecContext(ctx, hash, name, icon, element, ammoType, slot, rarity)
 		if err != nil {
 			log.Fatal(err)
 		}

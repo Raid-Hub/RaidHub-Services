@@ -82,7 +82,7 @@ func main() {
 		if *printAddrs {
 			fmt.Printf("sudo ip -6 addr add %s/64 dev %s\n", addr.String(), *ipv6interface)
 		}
-		proxyTransport.statsRl = append(proxyTransport.statsRl, rate.NewLimiter(rate.Every(time.Second/50), 75))
+		proxyTransport.statsRl = append(proxyTransport.statsRl, rate.NewLimiter(rate.Every(time.Second/40), 75))
 		proxyTransport.wwwRl = append(proxyTransport.wwwRl, rate.NewLimiter(rate.Every(time.Second/15), 30))
 		proxyTransport.rt = append(proxyTransport.rt, rt)
 		addr = addr.Next()
