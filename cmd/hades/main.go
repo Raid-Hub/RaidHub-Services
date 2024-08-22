@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	numWorkers = 50
+	numWorkers = 100
 )
 
 func main() {
@@ -79,7 +79,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Convert unique numbers to a slice for sorting
 	db, err := postgres.Connect()
 	if err != nil {
 		log.Fatalf("Error connecting to the database: %s", err)
@@ -143,7 +142,10 @@ func main() {
 			}
 		}()
 
+		var wg2 sync.WaitGroup
+		wg2.Add(1)
 		go func() {
+			defer wg2.Done()
 			for id := range failures {
 				failed = append(failed, id)
 			}
@@ -156,8 +158,9 @@ func main() {
 
 		close(ch)
 		wg.Wait()
-		close(successes)
 		close(failures)
+		close(successes)
+		wg2.Wait()
 	}
 
 	if err := os.Remove(temp); err != nil {

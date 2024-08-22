@@ -35,7 +35,8 @@ func process_store_request(msg *amqp.Delivery, db *sql.DB) {
 
 	var request PGCRStoreRequest
 	if err := json.Unmarshal(msg.Body, &request); err != nil {
-		log.Fatalf("Failed to unmarshal message: %s", err)
+		log.Println(string(msg.Body[:]))
+		log.Fatalf("Failed to unmarshal pgcr store request: %s", err)
 		return
 	}
 

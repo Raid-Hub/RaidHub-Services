@@ -1,4 +1,7 @@
-
+INSERT INTO "class_definition" ("hash", "name") VALUES 
+    (671679327, 'Hunter'),
+    (2271682572, 'Warlock'),
+    (3655393761, 'Titan');
 
 INSERT INTO "season" ("id", "short_name", "long_name", "dlc", "start_date") VALUES
     (1, 'Red War', 'Red War', 'Vanilla', '2017-09-06 09:00:00Z'),
@@ -24,28 +27,27 @@ INSERT INTO "season" ("id", "short_name", "long_name", "dlc", "start_date") VALU
     (21, 'Deep', 'Season of the Deep', 'Lightfall', '2023-05-23 17:00:00Z'),
     (22, 'Witch', 'Season of the Witch', 'Lightfall', '2023-08-22 17:00:00Z'),
     (23, 'Wish', 'Season of the Wish', 'Lightfall', '2023-11-28 17:00:00Z'),
-    (24, 'Echoes', 'Echoes', 'The Final Shape', '2024-06-04 17:00:00Z');
+    (24, 'Echoes', 'Episode: Echoes', 'The Final Shape', '2024-06-04 17:00:00Z'),
+    (25, 'Revenant', 'Episode: Revenant', 'The Final Shape', '2024-10-08 17:00:00Z');
 
 
 -- Insert Raid data
-INSERT INTO "activity_definition" (id, name, is_sunset, is_raid, path, release_date, contest_end, week_one_end)
+INSERT INTO "activity_definition" (id, name, is_sunset, is_raid, path, release_date, contest_end, week_one_end, milestone_hash)
 VALUES
-    (1, 'Leviathan', true, true, 'leviathan', '2017-09-13 17:00:00', NULL, '2017-09-19 17:00:00'),
-    (2, 'Eater of Worlds', true, true, 'eaterofworlds', '2017-12-08 18:00:00', NULL, '2017-12-12 17:00:00'),
-    (3, 'Spire of Stars', true, true, 'spireofstars', '2018-05-11 17:00:00', NULL, '2018-05-15 17:00:00'),
-    (4, 'Last Wish', false, true, 'lastwish', '2018-09-14 17:00:00', NULL, '2018-09-18 17:00:00'),
-    (5, 'Scourge of the Past', true, true, 'scourgeofthepast', '2018-12-07 17:00:00', NULL, '2018-12-11 17:00:00'),
-    (6, 'Crown of Sorrow', true, true, 'crownofsorrow', '2019-06-04 23:00:00', '2019-06-05 23:00:00', '2019-06-11 17:00:00'),
-    (7, 'Garden of Salvation', false, true, 'gardenofsalvation', '2019-10-05 17:00:00', '2019-10-06 17:00:00', '2019-10-08 17:00:00'),
-    (8, 'Deep Stone Crypt', false, true, 'deepstonecrypt', '2020-11-21 18:00:00', '2020-11-22 18:00:00', '2020-11-24 17:00:00'),
-    (9, 'Vault of Glass', false, true, 'vaultofglass', '2021-05-22 17:00:00', '2021-05-23 17:00:00', '2021-05-25 17:00:00'),
-    (10, 'Vow of the Disciple', false, true, 'vowofthedisciple', '2022-03-05 18:00:00', '2022-03-07 18:00:00', '2022-03-08 17:00:00'),
-    (11, 'King''s Fall', false, true, 'kingsfall', '2022-08-26 17:00:00', '2022-08-27 17:00:00', '2022-08-30 17:00:00'),
-    (12, 'Root of Nightmares', false, true, 'rootofnightmares', '2023-03-10 17:00:00', '2023-03-12 17:00:00', '2023-03-14 17:00:00'),
-    (13, 'Crota''s End', false, true, 'crotasend', '2023-09-01 17:00:00', '2023-09-03 17:00:00', '2023-09-05 17:00:00'),
-    (13, 'Salvation''s Edge', false, true, 'salvationsedge', '2024-06-07 17:00:00', '2024-06-09 17:00:00', '2024-06-11 17:00:00'),
-    (101, 'The Pantheon', false, false, 'pantheon', '2024-04-30 17:00:00', NULL, NULL);
-
+    (1, 'Leviathan', true, true, 'leviathan', '2017-09-13 17:00:00', NULL, '2017-09-19 17:00:00', NULL),
+    (2, 'Eater of Worlds', true, true, 'eaterofworlds', '2017-12-08 18:00:00', NULL, '2017-12-12 17:00:00', NULL),
+    (3, 'Spire of Stars', true, true, 'spireofstars', '2018-05-11 17:00:00', NULL, '2018-05-15 17:00:00', NULL),
+    (4, 'Last Wish', false, true, 'lastwish', '2018-09-14 17:00:00', NULL, '2018-09-18 17:00:00', 3181387331),
+    (5, 'Scourge of the Past', true, true, 'scourgeofthepast', '2018-12-07 17:00:00', NULL, '2018-12-11 17:00:00', NULL),
+    (6, 'Crown of Sorrow', true, true, 'crownofsorrow', '2019-06-04 23:00:00', '2019-06-05 23:00:00', '2019-06-11 17:00:00', NULL),
+    (7, 'Garden of Salvation', false, true, 'gardenofsalvation', '2019-10-05 17:00:00', '2019-10-06 17:00:00', '2019-10-08 17:00:00', 2712317338),
+    (8, 'Deep Stone Crypt', false, true, 'deepstonecrypt', '2020-11-21 18:00:00', '2020-11-22 18:00:00', '2020-11-24 17:00:00', 2712317338),
+    (9, 'Vault of Glass', false, true, 'vaultofglass', '2021-05-22 17:00:00', '2021-05-23 17:00:00', '2021-05-25 17:00:00', 1888320892),
+    (10, 'Vow of the Disciple', false, true, 'vowofthedisciple', '2022-03-05 18:00:00', '2022-03-07 18:00:00', '2022-03-08 17:00:00', 2136320298),
+    (11, 'King''s Fall', false, true, 'kingsfall', '2022-08-26 17:00:00', '2022-08-27 17:00:00', '2022-08-30 17:00:00', 292102995),
+    (12, 'Root of Nightmares', false, true, 'rootofnightmares', '2023-03-10 17:00:00', '2023-03-12 17:00:00', '2023-03-14 17:00:00', 3699252268),
+    (13, 'Crota''s End', false, true, 'crotasend', '2023-09-01 17:00:00', '2023-09-03 17:00:00', '2023-09-05 17:00:00', NULL),
+    (101, 'The Pantheon', false, false, 'pantheon', '2024-04-30 17:00:00', NULL, NULL, NULL);
 
 -- Insert Version data
 INSERT INTO "version_definition" ("id", "name", "path", "associated_activity_id") VALUES
@@ -53,12 +55,13 @@ INSERT INTO "version_definition" ("id", "name", "path", "associated_activity_id"
     (2, 'Guided Games', 'guided', NULL),
     (3, 'Prestige', 'prestige', NULL),
     (4, 'Master', 'master', NULL),
+    (32, 'Contest', 'contest', NULL),
     (64, 'Tempo''s Edge', 'challenge', 9),
     (65, 'Regicide', 'challenge', 11),
     (66, 'Superior Swordplay', 'challenge', 13);
 
 -- Insert RaidHash data
-INSERT INTO "activity_hash" ("activity_id", "version_id", "hash", "is_world_first") VALUES
+INSERT INTO "activity_hash" ("activity_id", "version_id", "hash", "is_world_first")
     -- LEVIATHAN
     (1, 1, 2693136600, false),
     (1, 1, 2693136601, true),
@@ -157,6 +160,7 @@ INSERT INTO "activity_hash" ("activity_id", "version_id", "hash", "is_world_firs
     (12, 4, 2918919505, false),
     -- CROTAS_END
     (13, 1, 4179289725, false),
+    (13, 1, 107319834, false),
     -- CROTAS_END GUIDEDGAMES
     (13, 2, 4103176774, false),
     -- CROTAS_END CHALLENGE_CROTA
@@ -170,11 +174,14 @@ UPDATE activity_hash SET release_date_override = '2018-07-18 17:00:00' WHERE act
 
 UPDATE activity_hash SET release_date_override = '2021-07-06 17:00:00' WHERE activity_id = 9 AND version_id = 4;
 UPDATE activity_hash SET release_date_override = '2022-04-19 17:00:00' WHERE activity_id = 10 AND version_id = 4;
-UPDATE activity_hash SET release_date_override = '2022-09-22 17:00:00' WHERE activity_id = 11 AND version_id = 4;
+UPDATE activity_hash SET release_date_override = '2022-09-20 17:00:00' WHERE activity_id = 11 AND version_id = 4;
 UPDATE activity_hash SET release_date_override = '2023-03-28 17:00:00' WHERE activity_id = 12 AND version_id = 4;
 UPDATE activity_hash SET release_date_override = '2023-09-21 17:00:00' WHERE activity_id = 13 AND version_id = 4;
 
 -- Pantheon
+INSERT INTO "activity_definition" (id, name, is_sunset, is_raid, path, release_date)
+VALUES (101, 'The Pantheon', false, false, 'pantheon', '2024-04-30 17:00:00');
+
 INSERT INTO "version_definition" ("id", "name", "associated_activity_id", "path") VALUES
     (128, 'Atraks Sovereign', 101, 'atraks'),
     (129, 'Oryx Exalted', 101, 'oryx'),
@@ -191,11 +198,22 @@ INSERT INTO "activity_hash" ("hash", "activity_id", "version_id", "release_date_
     -- Nezarec Sublime
     (4169648182, 101, 131, '2024-05-21 17:00:00');
 
-UPDATE activity_definition SET milestone_hash = 3181387331 WHERE id = 4; 
-UPDATE activity_definition SET milestone_hash = 2712317338 WHERE id = 7; 
-UPDATE activity_definition SET milestone_hash = 541780856 WHERE id = 8;
-UPDATE activity_definition SET milestone_hash = 1888320892 WHERE id = 9;
-UPDATE activity_definition SET milestone_hash = 2136320298 WHERE id = 10;
-UPDATE activity_definition SET milestone_hash = 292102995 WHERE id = 11; 
-UPDATE activity_definition SET milestone_hash = 3699252268 WHERE id = 12;
-UPDATE activity_definition SET milestone_hash = 540415767 WHERE id = 13;
+-- Salvation's Edge
+INSERT INTO "activity_definition" (id, name, path, release_date, contest_end, week_one_end)
+    (14, 'Salvation''s Edge', 'salvationsedge', '2024-06-07 17:00:00', '2024-06-09 17:00:00', '2024-06-11 17:00:00');
+
+INSERT INTO "version_definition" ("id", "name", "path", "associated_activity_id") VALUES
+    (32, 'Contest', 'contest', NULL);
+
+INSERT INTO "activity_hash" ("activity_id", "version_id", "hash", "is_world_first") VALUES
+    -- SALVATIONS_EDGE
+    (14, 1, 1541433876, false),
+    -- SALVATIONS_EDGE CONTEST
+    (14, 32, 2192826039, true);
+    -- SALVATIONS_EDGE MASTER
+    (14, 4, 4129614942, false);
+
+UPDATE "activity_definition" SET "milestone_hash" = 540415767 WHERE id = 13;
+UPDATE "activity_definition" SET "milestone_hash" = 4196566271 WHERE id = 14;
+
+UPDATE "activity_hash" SET "release_date_override" = '2024-06-25T17:00:00Z' WHERE hash = 4129614942;

@@ -4,7 +4,7 @@ CREATE TABLE "season" (
     "short_name" TEXT NOT NULL,
     "long_name" TEXT NOT NULL,
     "dlc" TEXT NOT NULL,
-    "start_date" TIMESTAMP(0) NOT NULL
+    "start_date" TIMESTAMP(0) WITH TIME ZONE NOT NULL
 );
 CREATE INDEX "season_idx_date" ON season(start_date DESC);
 
@@ -14,8 +14,8 @@ DECLARE
     season_id INTEGER;
 BEGIN
     SELECT ("id") INTO season_id FROM "season"
-    WHERE "season"."start_date" < sd 
-    ORDER BY "season"."start_date" DESC 
+    WHERE "season"."start_date" AT TIME ZONE 'UTC' < sd 
+    ORDER BY "season"."start_date" AT TIME ZONE 'UTC' DESC 
     LIMIT 1;
 
     RETURN season_id;
@@ -24,5 +24,4 @@ $$ LANGUAGE plpgsql
 IMMUTABLE;
 
 ALTER TABLE "activity"
-ADD COLUMN "season_id" INTEGER GENERATED ALWAYS AS (get_season(date_started)) STORED;
-
+ADD COLUMN "season_id" INTEGER GENERATED ALWAYS AS (get_season(date_started AT TIME ZONE 'UTC')) STORED;

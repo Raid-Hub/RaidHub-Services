@@ -2,7 +2,7 @@ package main
 
 const (
 	minWorkers = 5
-	maxWorkers = 200
+	maxWorkers = 175
 
 	retryDelayTime = 5500
 )

@@ -106,7 +106,7 @@ func process(msgs []amqp.Delivery, c *driver.Conn) {
 	for _, msg := range msgs {
 		var request ProcessedActivity
 		if err := json.Unmarshal(msg.Body, &request); err != nil {
-			log.Println("Failed to unmarshal message:", err)
+			log.Println("Failed to unmarshal activity:", err)
 			return
 		}
 		instances = append(instances, *parse(request))

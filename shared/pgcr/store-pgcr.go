@@ -231,6 +231,28 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 		}
 	}
 
+	// update total_time_played_seconds for all players
+	for _, playerActivity := range pgcr.Players {
+		_, err = tx.Exec(`UPDATE player_stats 
+			SET total_time_played_seconds = total_time_played_seconds + $1 
+			WHERE membership_id = $2 AND activity_id = $3`,
+			playerActivity.TimePlayedSeconds, playerActivity.Player.MembershipId, activityId)
+		if err != nil {
+			log.Printf("Error updating total_time_played_seconds for membershipId %d", playerActivity.Player.MembershipId)
+			return nil, false, err
+		}
+
+		_, err = tx.Exec(`UPDATE player 
+			SET total_time_played_seconds = total_time_played_seconds + $1
+			WHERE membership_id = $2`,
+			playerActivity.TimePlayedSeconds, playerActivity.Player.MembershipId)
+		if err != nil {
+			log.Printf("Error updating total_time_played_seconds for membershipId %d", playerActivity.Player.MembershipId)
+			return nil, false, err
+		}
+
+	}
+
 	sherpasHappened := anyPro && noobsCount > 0
 	if sherpasHappened {
 		log.Printf("Found %d sherpas for instance %d", noobsCount, pgcr.InstanceId)
@@ -290,26 +312,14 @@ func StorePGCR(pgcr *ProcessedActivity, raw *bungie.DestinyPostGameCarnageReport
 						WHEN $4 = true THEN player_stats.fresh_clears + 1
 						ELSE player_stats.fresh_clears
 					END,
-				trios = CASE 
-						WHEN $5 = 3 THEN player_stats.trios + 1
-						ELSE player_stats.trios
-					END,
-				duos = CASE 
-						WHEN $5 = 2 THEN player_stats.duos + 1
-						ELSE player_stats.duos
-					END,
-				solos = CASE 
-						WHEN $5 = 1 THEN player_stats.solos + 1
-						ELSE player_stats.solos
-					END,
 				fastest_instance_id = CASE
-						WHEN $4 = true AND $6::int < $7::int THEN $8::bigint
+						WHEN $4 = true AND $5::int < $6::int THEN $7::bigint
 						ELSE player_stats.fastest_instance_id
 					END
 			WHERE
 				membership_id = $1 AND
 				activity_id = $2;
-			`, membershipId, activityId, playerActivity.Sherpas, pgcr.Fresh, pgcr.PlayerCount, pgcr.DurationSeconds, fastestClearSoFar[membershipId], pgcr.InstanceId)
+			`, membershipId, activityId, playerActivity.Sherpas, pgcr.Fresh, pgcr.DurationSeconds, fastestClearSoFar[membershipId], pgcr.InstanceId)
 
 		if err != nil {
 			log.Printf("Error updating player_stats for membershipId %d", membershipId)
